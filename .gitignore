@@ -1,9 +1,11 @@
 # Build
-build/
-build-*/
+build*/
 out/
 cmake-build-*/
 CMakeUserPresets.json
+
+# Logs
+*.log
 
 # vcpkg
 vcpkg_installed/

@@ -1,0 +1,12 @@
+{
+  "name": "numerical-p2d",
+  "version": "0.1.0",
+  "description": "Numerical methods for the P2D/DFN battery model",
+  "dependencies": [
+    "eigen3",
+    { "name": "sundials", "features": ["klu"] },
+    "pybind11",
+    "yaml-cpp",
+    "catch2"
+  ]
+}

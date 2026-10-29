@@ -1,0 +1,63 @@
+cmake_minimum_required(VERSION 3.24)
+project(numerical_p2d VERSION 0.1.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+option(DFN_BUILD_LABS "Build standalone teaching labs" ON)
+option(DFN_BUILD_TESTS "Build tests" ON)
+option(DFN_USE_KLU "Enable the SUNDIALS IDA + KLU backend" OFF)
+option(DFN_BUILD_PYTHON "Build pybind11 bindings" OFF)
+
+add_library(dfn_core INTERFACE)
+target_include_directories(dfn_core INTERFACE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_compile_features(dfn_core INTERFACE cxx_std_20)
+
+if(MSVC)
+  target_compile_options(dfn_core INTERFACE /W4 /permissive-)
+else()
+  target_compile_options(dfn_core INTERFACE -Wall -Wextra -Wpedantic)
+endif()
+
+add_executable(dfn-sim src/main.cpp)
+target_link_libraries(dfn-sim PRIVATE dfn_core)
+
+if(DFN_BUILD_LABS)
+  add_executable(ocv_curve labs/ocv_curve.cpp)
+  target_link_libraries(ocv_curve PRIVATE dfn_core)
+endif()
+
+if(DFN_USE_KLU)
+  find_package(SUNDIALS CONFIG QUIET)
+  if(NOT SUNDIALS_FOUND)
+    message(FATAL_ERROR
+      "DFN_USE_KLU=ON but SUNDIALS was not found. Install sundials[klu] via vcpkg.")
+  endif()
+  target_compile_definitions(dfn_core INTERFACE DFN_USE_KLU=1)
+  message(STATUS "SUNDIALS found (version ${SUNDIALS_VERSION})")
+  if(TARGET SUNDIALS::sunlinsolklu)
+    message(STATUS "KLU linear solver target is available")
+  else()
+    message(WARNING "SUNDIALS found but SUNDIALS::sunlinsolklu is missing; check the KLU feature.")
+  endif()
+endif()
+
+include(CTest)
+if(BUILD_TESTING AND DFN_BUILD_TESTS)
+  add_executable(dfn_smoke tests/test_smoke.cpp)
+  target_link_libraries(dfn_smoke PRIVATE dfn_core)
+  add_test(NAME dfn_smoke COMMAND dfn_smoke)
+  add_test(NAME dfn_sim_help COMMAND dfn-sim --help)
+  if(DFN_BUILD_LABS)
+    add_test(NAME ocv_curve_runs COMMAND ocv_curve --n 3)
+  endif()
+endif()
+
+if(DFN_BUILD_PYTHON)
+  find_package(pybind11 CONFIG REQUIRED)
+  pybind11_add_module(dfn_py bindings/python.cpp)
+  target_link_libraries(dfn_py PRIVATE dfn_core)
+endif()

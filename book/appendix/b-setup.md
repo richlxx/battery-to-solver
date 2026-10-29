@@ -22,19 +22,32 @@ g++ -std=c++20 labs/ocv_curve.cpp -o ocv
 python scripts/plot_ocv.py ocv.csv
 ```
 
-Windows 上如果只有 MSVC，用：
+Windows 上如果只有 MSVC，在“Developer Command Prompt”里用：
 
-```bash
+```bat
 cl /std:c++20 /EHsc labs\ocv_curve.cpp
+ocv_curve.exe > ocv.csv
 ```
 
 ## B.3 完整项目构建
+
+Windows 一键构建（推荐，使用 Visual Studio 自带的 CMake 4.x）：
+
+```bat
+scripts\build_msvc.bat
+```
+
+脚本会通过 `vswhere` 找到 VS、使用 VS 自带的 CMake 并选择对应的 Visual Studio 生成器。**CMake ≤ 3.31 不认识 VS 18，且在中文路径下可能直接崩溃**，所以不要用系统旧版 CMake 配置本仓库。
+
+手动构建（Linux/macOS，或英文路径下的 Windows）：
 
 ```bash
 cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 cmake --build build --config Release -j
 ctest --test-dir build -C Release --output-on-failure
 ```
+
+注意：M0 阶段的所有目标（`dfn-sim`、`ocv_curve`、冒烟测试）**只依赖标准库**，不装 vcpkg 也能构建。Eigen、YAML、SUNDIALS 从 M2/M4 才开始使用。
 
 ## B.4 Python 侧
 
