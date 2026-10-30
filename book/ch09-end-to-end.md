@@ -86,6 +86,8 @@ std::vector<int> DfnModel::variable_types() const {
 | 恒流恒压 CC-CV | 2 | CC 段电流，CV 段电压 | 先电压、后电流 |
 | 脉冲 | 多段 | 电流在 $I$ 与 0 之间切换 | 电压 |
 
+上表默认指放电。加 `--charge` 后电流取负、截止电压换成 `--v-max`、事件符号取反，四种工况同样可用；9.7 节给出例子。
+
 ![图 9.1　四种工况的电流（虚线，左轴）与电压（实线，右轴）示意，横轴为归一化时间](assets/fig09-protocol.svg)
 
 恒流段的事件函数直接返回电压差：
@@ -319,7 +321,9 @@ Options:
                           initial state at that voltage
       --crate R           C-rate, 1C = 36 A/m^2 in this demo cell
       --current J         Current density in A/m^2 (overrides --crate)
+      --charge            Charge instead of discharge (negative current)
       --v-min V           Discharge cutoff (default 3.5 V)
+      --v-max V           Charge cutoff (default 4.0 V)
       --hold-voltage V    CV setpoint (default: the cutoff)
       --t-max S           End of the CC phase (default 20000 s)
       --hold S            CV hold time after the cutoff (default 600 s)
@@ -341,10 +345,19 @@ dfn-sim --mode cccv  --crate 1 --hold 400   --out results/cccv.csv
 dfn-sim --mode pulse --crate 1 --t-max 3600 --pulse-period 600 --out results/pulse.csv
 ```
 
+加 `--charge` 后，电流取负、截止电压换成 `--v-max`，四种工况都可用：
+
+```
+dfn-sim --mode cc   --crate 1 --charge --v-max 4.0 --dt 10 --out results/charge.csv
+dfn-sim --mode cccv --crate 1 --charge --v-max 4.0 --hold 400 --out results/charge_cccv.csv
+```
+
+充电要特别注意电压上限必须落在 OCP 的可达范围内。本演示电池的开路电压最高约 4.03 V，`--v-max 4.0` 可达；若设成 4.2 V，模型永远到不了截止，求解器只会在浓度上界附近耗尽步长。
+
 不写 `--out` 时 CSV 走标准输出，摘要走标准错误，可以直接管道给别的程序：
 
 ```
-mode=cc grid=8/4/8 nr=6/6 n=168 nnz=704 samples=60 t_end=3533.7098 s
+mode=cc/discharge grid=8/4/8 nr=6/6 n=168 nnz=704 samples=60 t_end=3533.7098 s
 V_end=3.5000 V I_end=36.0000 A/m^2 cap=35.3371 Ah/m^2 Li_drift=2.4358e-14
 steps=270 jac=32 wall=2.846 ms
 ```

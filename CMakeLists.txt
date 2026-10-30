@@ -9,6 +9,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(DFN_BUILD_LABS "Build standalone teaching labs" ON)
 option(DFN_BUILD_TESTS "Build tests" ON)
 option(DFN_USE_KLU "Enable the SUNDIALS IDA + KLU backend" OFF)
+option(DFN_USE_CUDA "Build the CUDA batch lab (needs an NVIDIA GPU)" OFF)
 
 add_library(dfn_core STATIC
   src/params.cpp
@@ -55,6 +56,36 @@ if(DFN_BUILD_LABS)
   target_link_libraries(bdf2_demo PRIVATE dfn_core)
   add_executable(sparsity_map labs/sparsity_map.cpp)
   target_link_libraries(sparsity_map PRIVATE dfn_core)
+  add_executable(param_fit labs/param_fit.cpp)
+  target_link_libraries(param_fit PRIVATE dfn_core)
+endif()
+
+if(DFN_USE_CUDA AND DFN_BUILD_LABS)
+  if(DEFINED ENV{CUDA_PATH})
+    set(DFN_CUDA_ROOT "$ENV{CUDA_PATH}")
+  elseif(DEFINED ENV{CUDA_HOME})
+    set(DFN_CUDA_ROOT "$ENV{CUDA_HOME}")
+  else()
+    set(DFN_CUDA_ROOT "")
+  endif()
+  find_path(DFN_CUDA_INCLUDE cuda.h HINTS "${DFN_CUDA_ROOT}/include")
+  find_library(DFN_CUDA_DRIVER cuda HINTS "${DFN_CUDA_ROOT}/lib/x64"
+               "${DFN_CUDA_ROOT}/lib64")
+  find_library(DFN_NVRTC nvrtc HINTS "${DFN_CUDA_ROOT}/lib/x64"
+               "${DFN_CUDA_ROOT}/lib64")
+  if(NOT DFN_CUDA_INCLUDE OR NOT DFN_CUDA_DRIVER OR NOT DFN_NVRTC)
+    message(FATAL_ERROR
+      "DFN_USE_CUDA=ON but CUDA toolkit headers/libraries were not found. "
+      "Set CUDA_PATH (Windows) or CUDA_HOME (Linux).")
+  endif()
+  message(STATUS "CUDA toolkit root: ${DFN_CUDA_ROOT}")
+  add_executable(spm_batch labs/spm_batch.cpp)
+  target_include_directories(spm_batch PRIVATE "${DFN_CUDA_INCLUDE}")
+  target_link_libraries(spm_batch PRIVATE dfn_core "${DFN_CUDA_DRIVER}"
+                        "${DFN_NVRTC}")
+  if(MSVC)
+    target_compile_options(spm_batch PRIVATE /utf-8)
+  endif()
 endif()
 
 if(DFN_USE_KLU)
@@ -173,6 +204,20 @@ if(BUILD_TESTING AND DFN_BUILD_TESTS)
   if(DFN_USE_KLU)
     target_link_libraries(dfn_spm_tests PRIVATE dfn_ida)
     dfn_copy_runtime_dlls(dfn_spm_tests)
+  endif()
+
+  add_executable(dfn_fit_tests tests/test_fit.cpp)
+  target_link_libraries(dfn_fit_tests PRIVATE dfn_core)
+  add_test(NAME dfn_fit_tests COMMAND dfn_fit_tests)
+  if(DFN_USE_KLU)
+    target_link_libraries(dfn_fit_tests PRIVATE dfn_ida)
+    dfn_copy_runtime_dlls(dfn_fit_tests)
+  endif()
+
+  if(DFN_USE_CUDA AND DFN_BUILD_LABS)
+    add_test(NAME spm_batch_check
+      COMMAND spm_batch --config "${CMAKE_CURRENT_SOURCE_DIR}/configs/fit_demo.yaml"
+              --samples 16 --check)
   endif()
 
   if(DFN_USE_KLU)

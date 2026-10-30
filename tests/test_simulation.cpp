@@ -141,9 +141,46 @@ int main() {
     return fail("pulse run did not reach t_max");
   }
 
+  dfn::SimulationConfig charge;
+  charge.mode = dfn::SimulationMode::cccv;
+  charge.charge = true;
+  charge.v_max = 4.0;
+  charge.t_hold = 400.0;
+  charge.output_interval = 100.0;
+  const dfn::SimulationReport charge_report = dfn::run_simulation(charge);
+  if (!charge_report.ok) {
+    std::cerr << charge_report.message << "\n";
+    return fail("charge CC-CV simulation failed");
+  }
+  if (!charge_report.cutoff_reached || charge_report.capacity <= 0.0) {
+    return fail("charge phase did not reach the upper cutoff");
+  }
+  bool saw_charge_cv = false;
+  for (const dfn::SimulationSample& sample : charge_report.samples) {
+    if (sample.current > 0.0) {
+      return fail("charge current must be negative");
+    }
+    if (sample.phase == "cv") {
+      saw_charge_cv = true;
+      if (!nearly(sample.voltage, 4.0, 1e-6)) {
+        return fail("charge CV phase does not hold v_max");
+      }
+    }
+  }
+  if (!saw_charge_cv) {
+    return fail("charge CC-CV did not enter the CV phase");
+  }
+  if (std::abs(charge_report.samples.back().current) >=
+      std::abs(charge_report.samples[2].current)) {
+    return fail("charge CV current did not decay");
+  }
+
   std::cout << "dfn sim ok: t_event " << report.t_end << " s, capacity "
             << report.capacity / 3600.0 << " Ah/m^2, CV end " << last.current
-            << " A/m^2, pulse t_end " << pulse_report.t_end << " s\n";
+            << " A/m^2, pulse t_end " << pulse_report.t_end
+            << " s, charge capacity " << charge_report.capacity / 3600.0
+            << " Ah/m^2, charge CV end "
+            << charge_report.samples.back().current << " A/m^2\n";
   return 0;
 #endif
 }

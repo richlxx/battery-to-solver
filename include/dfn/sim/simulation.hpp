@@ -16,12 +16,15 @@ struct SimulationConfig {
   SimulationMode mode = SimulationMode::cccv;
 
   // The demo cell stores about 36 Ah/m^2, so 36 A/m^2 is roughly 1C.
-  // Current densities are A/m^2, positive = discharge.
+  // Current densities are A/m^2, positive = discharge. Charge flips the
+  // applied current sign and turns v_max into the cutoff.
   double i_1c = 36.0;
   double c_rate = 1.0;
   double current_density = 0.0;  // if nonzero, overrides c_rate
+  bool charge = false;
 
   double v_min = 3.5;
+  double v_max = 4.0;
   double hold_voltage = 0.0;  // CV mode; zero means "use the cutoff voltage"
 
   double t_max = 20000.0;

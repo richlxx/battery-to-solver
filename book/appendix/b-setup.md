@@ -9,6 +9,7 @@
 | vcpkg | 依赖管理 | 官方 bootstrap 脚本 |
 | Eigen3 | 线性代数 | vcpkg |
 | SUNDIALS（KLU 特性） | IDA + KLU | vcpkg `sundials[klu]` |
+| CUDA Toolkit 12.x（可选） | 第 11 章 GPU 批量实验 | NVIDIA 官网 |
 | pybind11、yaml-cpp、Catch2 | 绑定/配置/测试 | vcpkg |
 | uv | Python 环境 | 独立安装 |
 
@@ -71,6 +72,19 @@ cmake -S . -B build-klu -DDFN_USE_KLU=ON \
 ```
 
 注意：不装 vcpkg 也能**构建**全部章节的代码与测试；第 8 章之后的仿真**运行**需要 SUNDIALS（见下）。参数文件用的是自带的 YAML 子集解析器，不依赖第三方库。
+
+### 带 CUDA 的构建（第 11 章，可选）
+
+第 11 章的 GPU 实验需要 NVIDIA 显卡与 CUDA Toolkit（含 NVRTC 与 Driver API）。Windows 下：
+
+```bat
+scripts\build_cuda.bat
+build-cuda\Release\spm_batch.exe --samples 65536 --repeat 3
+```
+
+脚本会读取环境变量 `CUDA_PATH`，配置到 `build-cuda/` 并编译 `spm_batch`。
+
+CUDA 内核由 NVRTC 在运行时编译，因此不需要 Visual Studio 的 CUDA 集成，也不要求 nvcc 与 MSVC 版本匹配（CUDA 12.6 不认识 VS 18，直接走 nvcc 会失败）。内核源码仍是标准 CUDA C++；如果你有受支持的 nvcc，也可以把 `labs/spm_batch.cpp` 里的内核字符串原样移到 `.cu` 文件，用常规 CUDA 工程编译。
 
 ## B.4 Python 侧
 

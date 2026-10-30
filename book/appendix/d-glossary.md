@@ -32,3 +32,12 @@
 | 过电位 | overpotential | 实际电位与平衡电位之差 |
 | 化学计量比 | stoichiometry | 电极中锂占可容纳位的比例 |
 | 比表面积 | specific surface area | 单位体积电极的活性面积 |
+| 正问题 | forward problem | 已知参数算电压/浓度 |
+| 反问题 | inverse problem | 已知测量反推参数 |
+| 可辨识性 | identifiability | 数据能否唯一确定参数 |
+| 敏感度 | sensitivity | 参数小幅变化引起的输出变化 |
+| 条件数 | condition number | 矩阵对扰动的放大倍数；越大越难反演 |
+| 置信区间 | confidence interval | 参数估计的不确定范围 |
+| Levenberg–Marquardt | LM | 带阻尼的 Gauss–Newton，用于非线性最小二乘 |
+| GITT | galvanostatic intermittent titration | 恒流脉冲 + 静置，分离动力学与扩散 |
+| NVRTC | NVIDIA Runtime Compilation | 运行时把 CUDA C++ 编译成 GPU 代码 |

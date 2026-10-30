@@ -1,0 +1,45 @@
+# Synthetic parameter set for chapter 11. The geometry and diffusion data are
+# the demo values; the reaction constants are deliberately smaller so that
+# charge-transfer overpotential is visible at 0.5C-2C. This is a teaching
+# truth set, not a real material.
+
+cell:
+  area: 0.0165
+  temperature: 298.15
+
+negative:
+  thickness: 8.5e-5
+  radius: 5.0e-6
+  porosity: 0.25
+  bruggeman: 1.5
+  c_max: 30000.0
+  c0: 24000.0
+  d_s: 3.0e-14
+  k: 3.0e-11
+  alpha_a: 0.5
+  alpha_c: 0.5
+  sigma: 100.0
+
+positive:
+  thickness: 7.5e-5
+  radius: 5.0e-6
+  porosity: 0.33
+  bruggeman: 1.5
+  c_max: 60000.0
+  c0: 18000.0
+  d_s: 4.0e-15
+  k: 5.0e-11
+  alpha_a: 0.5
+  alpha_c: 0.5
+  sigma: 10.0
+
+separator:
+  thickness: 1.2e-5
+  porosity: 0.47
+  bruggeman: 1.5
+
+electrolyte:
+  c0: 1000.0
+  d_e: 5.0e-10
+  t_plus: 0.26
+  kappa: 1.0

@@ -47,6 +47,7 @@
 | 3 工业级 | 8 | 站在巨人肩上：IDA + KLU | ★★ | IDAKLU 后端 |
 | 4 集成 | 9 | 组装完整求解器：跑真实工况 | ★ | CLI + 三层验证报告 |
 | 5 延伸 | 10 | 走得更远（选学） | ★★★ | SPM/SPMe 对照与扩展地图 |
+| 5 延伸 | 11 | 综合实验：从时间–电压曲线反推参数 | ★★★ | 可辨识性分析 + LM + CUDA 批量实验 |
 
 附录：A 数学与参数速查、B 环境构建与 C++ 最小入门、C 调试清单、D 术语表、E API 对照、F 习题提示与答案、G 参考文献。
 
@@ -169,6 +170,7 @@ SolveReport ida_integrate(const DaeModel& model, const std::vector<double>& y0,
 | M4 | 第 7–8 章 | BDF2 + IDAKLU | 两后端逐点一致 | 5–6 天 |
 | M5 | 第 9 章 | CLI、验证矩阵、性能 | 1C 电压 RMSE < 10 mV（PyBaMM，省略 $\kappa_D$） | 3–4 天 |
 | M6 | 第 10 章 + 附录 + 试读修订 | 全书与速查 | 命令可复现、试读通过 | 4–5 天 |
+| M7 | 第 11 章（选学） | 参数辨识实验 + CUDA 批量 lab | 无噪声恢复、交叉验证、GPU/CPU 实测 | 4–5 天 |
 
 ## 10. 风险与对策
 
@@ -180,6 +182,7 @@ SolveReport ida_integrate(const DaeModel& model, const std::vector<double>& y0,
 | 篇幅膨胀 | 写作周期失控 | 每章 3500–6000 字、代码 200–500 行；超出的入附录 |
 | 只跑代码不理解 | 无法迁移 | 每章检查点 + 失败案例 + 手算练习 |
 | KLU/SuiteSparse 构建失败 | 第 5/8 章受阻 | vcpkg 优先；banded 降级并在附录 B 说明 |
+| CUDA 与 VS 版本不匹配 | 第 11 章无法构建 | 内核走 NVRTC + Driver API，不依赖 nvcc 的 VS 集成；无 GPU 读者可只跑 CPU 路径 |
 | PyBaMM 版本漂移 | 对比失效 | 锁定版本并记录参数集来源 |
 
 ## 11. 约定

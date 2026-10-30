@@ -23,7 +23,9 @@ void print_help() {
       << "                          initial state at that voltage\n"
       << "      --crate R           C-rate, 1C = 36 A/m^2 in this demo cell\n"
       << "      --current J         Current density in A/m^2 (overrides --crate)\n"
+      << "      --charge            Charge instead of discharge (negative current)\n"
       << "      --v-min V           Discharge cutoff (default 3.5 V)\n"
+      << "      --v-max V           Charge cutoff (default 4.0 V)\n"
       << "      --hold-voltage V    CV setpoint (default: the cutoff)\n"
       << "      --t-max S           End of the CC phase (default 20000 s)\n"
       << "      --hold S            CV hold time after the cutoff (default 600 s)\n"
@@ -36,7 +38,8 @@ void print_help() {
       << "      --out PATH          Write CSV to PATH instead of stdout\n"
       << "      --quiet             Do not print the summary\n\n"
       << "Example:\n"
-      << "  dfn-sim --mode cccv --crate 1 --dt 60 --out results/cccv.csv\n";
+      << "  dfn-sim --mode cccv --crate 1 --dt 60 --out results/cccv.csv\n"
+      << "  dfn-sim --mode cc --crate 1 --charge --v-max 4.0 --dt 10\n";
 }
 
 bool parse_double(const char* text, double* value) {
@@ -138,6 +141,17 @@ int main(int argc, char** argv) {
     if (arg == "--current") {
       if (!parse_double(value("--current"), &config.current_density)) {
         std::cerr << "error: --current needs a number\n";
+        return 2;
+      }
+      continue;
+    }
+    if (arg == "--charge") {
+      config.charge = true;
+      continue;
+    }
+    if (arg == "--v-max") {
+      if (!parse_double(value("--v-max"), &config.v_max)) {
+        std::cerr << "error: --v-max needs a number\n";
         return 2;
       }
       continue;
@@ -247,7 +261,9 @@ int main(int argc, char** argv) {
   if (!quiet && !report.samples.empty()) {
     const dfn::SimulationSample& last = report.samples.back();
     std::cerr << std::fixed << std::setprecision(4) << "mode="
-              << mode_name(config.mode) << " grid=" << config.n_x_neg << "/"
+              << mode_name(config.mode)
+              << (config.charge ? "/charge" : "/discharge") << " grid="
+              << config.n_x_neg << "/"
               << config.n_x_sep << "/" << config.n_x_pos << " nr="
               << config.n_r_neg << "/" << config.n_r_pos
               << " n=" << report.unknowns << " nnz=" << report.nnz

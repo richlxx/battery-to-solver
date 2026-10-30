@@ -66,6 +66,15 @@ def exe(name):
     return str(path)
 
 
+def cuda_exe(name):
+    path = ROOT / "build-cuda" / "Release" / (name + ".exe")
+    if not path.exists():
+        path = ROOT / "build-cuda" / "Release" / name
+    if not path.exists():
+        raise SystemExit(f"missing executable {path}; build with DFN_USE_CUDA=ON")
+    return str(path)
+
+
 def run(command):
     completed = subprocess.run(
         command, capture_output=True, text=True, cwd=ROOT, encoding="utf-8"
@@ -779,6 +788,140 @@ def stability_figure():
     save(fig, "fig07-stability.svg")
 
 
+def fit_figures(workdir):
+    wd = pathlib.Path(workdir)
+    kappas = {}
+    for p in ("a", "b", "c"):
+        data = wd / f"fit_{p}.csv"
+        sensitivity = wd / f"sens_{p}.csv"
+        run([exe("param_fit"), "--protocol", p, "--generate", "--out",
+             str(data), "--noise", "0.001", "--seed", "7"])
+        stdout, _ = run([exe("param_fit"), "--protocol", p, "--sensitivity",
+                         "--data", str(data), "--sensitivity-csv",
+                         str(sensitivity)])
+        kappas[p] = float(re.search(r"kappa ([0-9.eE+-]+)", stdout).group(1))
+
+    curve_path = wd / "fit_c_curve.csv"
+    run([exe("param_fit"), "--protocol", "c", "--fit", "--data",
+         str(wd / "fit_c.csv"), "--starts", "8", "--curve", str(curve_path)])
+
+    rows = read_csv((wd / "fit_c.csv").read_text())
+    t = np.array([float(r["t_s"]) for r in rows]) / 3600.0
+    current = np.array([float(r["current_a_m2"]) for r in rows])
+    voltage = np.array([float(r["voltage_v"]) for r in rows])
+
+    fig, (ax, ax2) = plt.subplots(
+        2, 1, figsize=(7.6, 4.2), sharex=True,
+        gridspec_kw={"height_ratios": [1.0, 1.4]}
+    )
+    ax.step(t, current, where="post", color=BLUE, lw=1.6)
+    ax.axhline(0.0, color=GRAY, lw=0.8, ls=":")
+    ax.set_ylabel("电流密度 [A/m²]", color=BLUE)
+    ax.tick_params(axis="y", colors=BLUE)
+    ax.grid(alpha=0.25)
+    ax.set_title("协议 C：静置 / 0.5C 放电 / 静置 / 0.5C 充电 / 1C / 2C",
+                 fontsize=10)
+    ax2.plot(t, voltage, color=ORANGE, lw=1.0)
+    ax2.set_xlabel("时间 [h]")
+    ax2.set_ylabel("端电压 [V]", color=ORANGE)
+    ax2.tick_params(axis="y", colors=ORANGE)
+    ax2.grid(alpha=0.25)
+    fig.tight_layout()
+    save(fig, "fig11-protocol.svg")
+
+    fig, (ax, ax2) = plt.subplots(
+        1, 2, figsize=(9.0, 3.7), gridspec_kw={"width_ratios": [1.7, 1]}
+    )
+    sens = read_csv((wd / "sens_c.csv").read_text())
+    ts = np.array([float(r["t_s"]) for r in sens]) / 3600.0
+    ax.plot(ts, 1000.0 * np.array([float(r["s_k"]) for r in sens]),
+            color=BLUE, lw=1.3, label="$\\partial V/\\partial\\ln k$")
+    ax.plot(ts, 1000.0 * np.array([float(r["s_dneg"]) for r in sens]),
+            color=ORANGE, lw=1.3, label="$\\partial V/\\partial\\ln D_{s,-}$")
+    ax.plot(ts, 1000.0 * np.array([float(r["s_dpos"]) for r in sens]),
+            color=GREEN, lw=1.3, label="$\\partial V/\\partial\\ln D_{s,+}$")
+    ax.set_xlabel("时间 [h]")
+    ax.set_ylabel("敏感度 [mV / 单位对数]")
+    ax.grid(alpha=0.25)
+    ax.legend(frameon=False, fontsize=8.5)
+    ax.set_title("协议 C 的敏感度", fontsize=10)
+
+    labels = ["A\n单次 0.5C 放电", "B\n+ 静置与充电", "C\n+ 1C/2C"]
+    values = [kappas[p] for p in "abc"]
+    bars = ax2.bar(labels, values, color=[GRAY, ORANGE, BLUE], alpha=0.85,
+                   width=0.55)
+    ax2.set_yscale("log")
+    ax2.set_ylabel("$\\kappa(J^\\top W J)$")
+    ax2.set_title("条件数：实验设计决定可辨识性", fontsize=10)
+    ax2.grid(axis="y", alpha=0.25)
+    for bar, value in zip(bars, values):
+        ax2.text(bar.get_x() + bar.get_width() / 2, value * 1.15,
+                 f"{value:.0f}", ha="center", fontsize=9)
+    fig.tight_layout()
+    save(fig, "fig11-identifiability.svg")
+
+    fit_rows = read_csv(curve_path.read_text())
+    ft = np.array([float(r["t_s"]) for r in fit_rows]) / 3600.0
+    data_v = np.array([float(r["data_v"]) for r in fit_rows])
+    fit_v = np.array([float(r["fit_v"]) for r in fit_rows])
+    residual = 1000.0 * (fit_v - data_v)
+    rmse = np.sqrt(np.mean(residual ** 2))
+    fig, (ax, ax2) = plt.subplots(
+        2, 1, figsize=(7.6, 4.4), sharex=True,
+        gridspec_kw={"height_ratios": [2.4, 1]}
+    )
+    ax.plot(ft, data_v, ".", ms=2.5, color=GRAY, alpha=0.6, label="合成数据")
+    ax.plot(ft, fit_v, color=BLUE, lw=1.4, label="拟合")
+    ax.set_ylabel("端电压 [V]")
+    ax.grid(alpha=0.25)
+    ax.legend(frameon=False, fontsize=9)
+    ax.set_title(f"协议 C 的拟合：RMSE = {rmse:.2f} mV", fontsize=10)
+    ax2.plot(ft, residual, color=ORANGE, lw=0.8)
+    ax2.axhline(0.0, color=GRAY, lw=0.8, ls=":")
+    ax2.set_xlabel("时间 [h]")
+    ax2.set_ylabel("拟合 − 数据 [mV]")
+    ax2.grid(alpha=0.25)
+    fig.tight_layout()
+    save(fig, "fig11-fit.svg")
+
+    benches = []
+    for n, threads in ((1000, 1), (4000, 16)):
+        stdout, _ = run([cuda_exe("spm_batch"), "--cpu", "--samples", str(n),
+                         "--threads", str(threads)])
+        per = float(re.search(r"per_sample_ms=([0-9.eE+-]+)", stdout).group(1))
+        benches.append((n, threads, 1000.0 * per))
+    gpu = []
+    for n in (128, 512, 2048, 8192, 65536):
+        stdout, _ = run([cuda_exe("spm_batch"), "--samples", str(n),
+                         "--repeat", "2"])
+        per = float(re.search(r"per_sample_us=([0-9.eE+-]+)", stdout).group(1))
+        gpu.append((n, per))
+
+    fig, ax = plt.subplots(figsize=(6.8, 4.0))
+    ax.loglog([b[0] for b in benches[:1]], [b[2] for b in benches[:1]], "o",
+              color=GRAY, ms=8, label="CPU 串行")
+    ax.loglog([b[0] for b in benches[1:]], [b[2] for b in benches[1:]], "s",
+              color=ORANGE, ms=8, label="CPU 16 线程")
+    ax.axhline(benches[0][2], color=GRAY, ls="--", lw=0.8, alpha=0.7)
+    ax.axhline(benches[1][2], color=ORANGE, ls="--", lw=0.8, alpha=0.7)
+    ax.loglog([g[0] for g in gpu], [g[1] for g in gpu], "o-", color=BLUE,
+              lw=1.6, ms=6, label="GPU（RTX 3060 Ti）")
+    ax.text(1.4e2, benches[0][2] * 0.82,
+            f"串行 {benches[0][2] / 1000.0:.2f} ms/样本", color=GRAY,
+            fontsize=8.5)
+    ax.text(1.4e2, benches[1][2] * 1.18,
+            f"16 线程 {benches[1][2] / 1000.0:.2f} ms/样本", color=ORANGE,
+            fontsize=8.5)
+    ax.set_xlabel("参数样本数 $N$")
+    ax.set_ylabel("每个样本耗时 [µs]")
+    ax.grid(True, which="both", alpha=0.25)
+    ax.legend(frameon=False, fontsize=9)
+    ax.set_title("GPU 只在批量足够大时占优", fontsize=10)
+    fig.tight_layout()
+    save(fig, "fig11-speedup.svg")
+    print("fit kappa:", kappas, "cpu:", benches, "gpu:", gpu)
+
+
 def main():
     global PREVIEW
     parser = argparse.ArgumentParser(description=__doc__)
@@ -815,6 +958,8 @@ def main():
             perf_figure(workdir)
         if not args.only or "spm" in args.only:
             spm_figure(workdir)
+        if not args.only or "fit11" in args.only:
+            fit_figures(workdir)
 
 
 if __name__ == "__main__":

@@ -61,3 +61,17 @@
 | `particle_lithium / average_stoichiometry` | 颗粒锂存量与平均化学计量数 | — |
 
 SPM 与 DFN 共用 `DaeModel`、`ida_integrate` 和 `CscBuilder`，所以对比实验只需要换模型对象；`labs/spm_compare.cpp` 就是同一个积分循环跑两遍。
+
+## E.6 参数拟合与 CUDA（第 11 章）
+
+| 本书接口 | 作用 | 对应公式 |
+| --- | --- | --- |
+| `dfn::fit::SpmBatch(params, nr, dt)` | 固定步长后向欧拉 SPM，CPU 与 GPU 的共同参考 | (11.2) 的正演 |
+| `SpmBatch::step(current)` | 前进一步，返回端电压 | (10.2)(10.3) |
+| `rows_from_protocol(params, segments, nr, dt)` | 按分段电流生成时间/电压表 | 协议 C |
+| `simulate_rows(params, rows, nr, dt)` | 按 CSV 中的电流序列重放 | 拟合残差 |
+| `dfn::levenberg_marquardt(theta, residual, options)` | 通用 LM，阻尼正规方程 | (11.5) |
+| `param_fit --generate/--sensitivity/--fit/--evaluate` | 数据生成、敏感度、拟合、交叉评估 | (11.2)–(11.6) |
+| `spm_batch --samples N` | NVRTC CUDA 批量正演与计时 | (11.7) |
+
+`SpmBatch` 的状态只有两个颗粒的径向浓度；表面浓度由 $c_{\mathrm{surf}}=c_{\mathrm{last}}-\alpha j$ 代数消去，所以每步只需要一次三对角求解，没有 Newton 迭代。`LmOptions` 的 `step` 是前向差分步长，`initial_lambda` 是初始阻尼；`LmResult` 返回最优参数、残差与迭代次数。

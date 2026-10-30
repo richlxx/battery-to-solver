@@ -46,9 +46,11 @@ std::vector<double> sample_times(double t0, double t1, double dt) {
 }
 
 double controlled_current(const SimulationConfig& config) {
-  return config.current_density != 0.0
-             ? std::abs(config.current_density)
-             : std::abs(config.c_rate) * config.i_1c;
+  const double magnitude =
+      config.current_density != 0.0
+          ? std::abs(config.current_density)
+          : std::abs(config.c_rate) * config.i_1c;
+  return config.charge ? -magnitude : magnitude;
 }
 
 void append_samples(const DfnModel& model, const SolveReport& report,
@@ -155,12 +157,13 @@ SimulationReport run_simulation(const SimulationConfig& config) {
 
   PhaseTotals totals;
   const double i_cc = controlled_current(config);
-  const double v_cut = config.v_min;
+  const double v_cut = config.charge ? config.v_max : config.v_min;
   const double i_cut = 0.05 * std::abs(i_cc);
 
-  auto voltage_cutoff = [&model, v_cut](double, const double* state,
-                                        const double*) {
-    return model.terminal_voltage(state) - v_cut;
+  auto voltage_cutoff = [&model, v_cut, charge = config.charge](
+                            double, const double* state, const double*) {
+    const double voltage = model.terminal_voltage(state);
+    return charge ? v_cut - voltage : voltage - v_cut;
   };
 
   double t = 0.0;
@@ -171,8 +174,10 @@ SimulationReport run_simulation(const SimulationConfig& config) {
     case SimulationMode::cc:
     case SimulationMode::cccv: {
       const double v0 = model.terminal_voltage(y.data());
-      if (v0 <= v_cut) {
-        report.message = "initial voltage is already below the cutoff";
+      if (config.charge ? v0 >= v_cut : v0 <= v_cut) {
+        report.message = config.charge
+                             ? "initial voltage is already above the cutoff"
+                             : "initial voltage is already below the cutoff";
         return report;
       }
       model.set_current_density(i_cc);
@@ -234,8 +239,11 @@ SimulationReport run_simulation(const SimulationConfig& config) {
       break;
     }
     case SimulationMode::pulse: {
-      if (model.terminal_voltage(y.data()) <= v_cut) {
-        report.message = "initial voltage is already below the cutoff";
+      const double v0 = model.terminal_voltage(y.data());
+      if (config.charge ? v0 >= v_cut : v0 <= v_cut) {
+        report.message = config.charge
+                             ? "initial voltage is already above the cutoff"
+                             : "initial voltage is already below the cutoff";
         return report;
       }
       options.events = {voltage_cutoff};
@@ -273,9 +281,9 @@ SimulationReport run_simulation(const SimulationConfig& config) {
 
   const double lithium1 = model.total_lithium(y.data());
   report.lithium_drift = std::abs(lithium1 - lithium0) / lithium0;
-  report.capacity =
-      kFaraday *
-      (neg_lithium0 - electrode_lithium_per_area(model, y.data(), false));
+  const double moved =
+      neg_lithium0 - electrode_lithium_per_area(model, y.data(), false);
+  report.capacity = kFaraday * (config.charge ? -moved : moved);
   report.t_end = report.samples.empty() ? t : report.samples.back().t;
   report.steps = totals.steps;
   report.residual_evals = totals.residual_evals;
