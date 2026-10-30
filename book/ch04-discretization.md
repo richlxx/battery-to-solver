@@ -48,7 +48,23 @@ Butler–Volmer 通量作为边界条件；耦合项在矩阵中的位置；为�
 
 ## 4.10 代码：装配器
 
-`grid.hpp`、`operators.hpp` 的装配流程；`tests/` 中的守恒与收敛测试。
+- `include/dfn/grid.hpp` / `src/grid.cpp`：生成均匀球壳网格与一维网格，保存面位置、体积、面积和面间距。
+- `include/dfn/operators.hpp` / `src/operators.cpp`：把 (3.1)(3.2) 装配成三对角算子；界面扩散系数用调和平均；边界通量作为源项加入。
+- `tests/test_discretization.cpp`：球体积、均匀稳态、零通量守恒、表面通量平衡、一维守恒。
+
+```cpp
+auto sphere = dfn::make_uniform_sphere_grid(8, 5.0e-6);
+std::vector<double> D(8, 3.0e-14);
+auto op = dfn::assemble_diffusion(sphere, D, 0.0, 1.0e-6);
+```
+
+最后一个参数是朝外的表面通量 $j$。把 $Ac+s$ 乘以体积求和，应精确等于 $-A_{\text{surf}}j$，这就是 (3.2) 的离散版本。
+
+```bash
+ctest --test-dir build -C Release -R dfn_discretization_tests --output-on-failure
+```
+
+完整的网格收敛阶实验在第 9 章与端到端验证一起运行。
 
 ## 陷阱
 

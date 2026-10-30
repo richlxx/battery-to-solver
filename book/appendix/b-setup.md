@@ -39,23 +39,56 @@ scripts\build_msvc.bat
 
 脚本会通过 `vswhere` 找到 VS、使用 VS 自带的 CMake 并选择对应的 Visual Studio 生成器。**CMake ≤ 3.31 不认识 VS 18，且在中文路径下可能直接崩溃**，所以不要用系统旧版 CMake 配置本仓库。
 
+### 带 IDA + KLU 的构建（第 8 章）
+
+SUNDIALS 的官方 vcpkg 端口不包含 KLU 特性，本仓库提供了一份 overlay 端口，把 `klu` 映射到 `SUNDIALS_ENABLE_KLU`：
+
+```bat
+vcpkg install --classic suitesparse-klu:x64-windows
+vcpkg install --classic --overlay-ports=cmake/vcpkg-overlay "sundials[klu]:x64-windows"
+scripts\build_msvc_klu.bat
+ctest --test-dir build-klu -C Release --output-on-failure
+```
+
+- `suitesparse-klu` 会连带编译 OpenBLAS 与 AMD/COLAMD/BTF，第一次安装约 4–5 分钟。
+- SUNDIALS 默认按动态库构建；CMake 会在构建后把用到的 DLL 复制到可执行文件旁边，所以运行测试不需要改 `PATH`。
+- `build_msvc_klu.bat` 会自动打开 `-DDFN_USE_KLU=ON` 并把 `CMAKE_PREFIX_PATH` 指向 vcpkg 的 `installed/x64-windows`。
+- 若配置时报 `SUNDIALS::sunlinsolklu is missing`，说明 vcpkg 装的是不带 KLU 的官方包，先卸载再按上面的 overlay 命令重装。
+
 手动构建（Linux/macOS，或英文路径下的 Windows）：
 
 ```bash
-cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+cmake -S . -B build
 cmake --build build --config Release -j
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-注意：M0 阶段的所有目标（`dfn-sim`、`ocv_curve`、冒烟测试）**只依赖标准库**，不装 vcpkg 也能构建。Eigen、YAML、SUNDIALS 从 M2/M4 才开始使用。
+带 KLU 时加上：
+
+```bash
+cmake -S . -B build-klu -DDFN_USE_KLU=ON \
+  -DCMAKE_PREFIX_PATH="$VCPKG_ROOT/installed/x64-windows"
+```
+
+注意：不装 vcpkg 也能**构建**全部章节的代码与测试；第 8 章之后的仿真**运行**需要 SUNDIALS（见下）。参数文件用的是自带的 YAML 子集解析器，不依赖第三方库。
 
 ## B.4 Python 侧
 
+第三层验证需要 PyBaMM：
+
 ```bash
 uv venv .venv
-uv pip install numpy matplotlib pybamm
-uv run python scripts/compare_pybamm.py --config configs/chen2020.yaml
+uv pip install -i https://pypi.tuna.tsinghua.edu.cn/simple pybamm matplotlib
 ```
+
+先让 C++ 程序生成曲线，再对比：
+
+```bash
+build-klu/Release/dfn-sim --mode cc --crate 1 --dt 60 --out results/cc.csv
+.venv/Scripts/python.exe scripts/compare_pybamm.py results/cc.csv --save results/cc.png
+```
+
+PyBaMM 首次导入较慢，属正常；参数映射写在 `scripts/compare_pybamm.py` 里，改参数时两边要一起改。
 
 ## B.5 C++ 最小入门
 
@@ -96,11 +129,12 @@ int main() {
 cmake -S . -B build-noklu -DDFN_USE_KLU=OFF
 ```
 
-第 5、8 章改用 banded 线性求解器，功能完整但性能下降；书中给出对比数据。
+这是默认配置。第 8 章的 `dfn_ida`、`klu_probe`、`ida_compare` 与 `dfn_ida_tests` 不会生成，其余章节的代码与测试不受影响。`dfn-sim` 仍可构建，但运行仿真时会提示"built without SUNDIALS"；参数文件加载和 `--help` 不受影响。第 8、9 章的正文仍可阅读，只是不能运行 IDA 相关实验。
 
 ## B.7 常见问题
 
-- SUNDIALS 版本与 `SUNContext` API 不匹配：固定 7.1.x，升级前先查发布说明。
+- SUNDIALS 版本与 `SUNContext` API 不匹配：本项目按 7.8.0 编写；升级前先查发布说明，注意 `IDAInit`、`IDASetId` 等签名变化。
 - pybind11 与 PyBaMM 的 Python 版本冲突：两者使用独立 venv。
 - SuiteSparse 链接失败：确认 vcpkg 三元组与编译器架构一致（x64-windows）。
-- 中文路径导致构建失败：把仓库放在纯英文路径下。
+- 中文路径导致构建失败：把仓库放在纯英文路径下，或使用 VS 自带的 CMake 4.x。
+- 运行时报 `找不到 sundials_ida.dll`：检查 DLL 是否被复制到 `build-klu\Release`，或把 `%VCPKG_ROOT%\installed\x64-windows\bin` 加入 `PATH`。

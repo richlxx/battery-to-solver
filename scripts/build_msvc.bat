@@ -23,7 +23,9 @@ if not exist "%CMAKE_EXE%" (
   exit /b 1
 )
 
-"%CMAKE_EXE%" -S . -B build
+if not defined DFN_BUILD_DIR set "DFN_BUILD_DIR=build"
+
+"%CMAKE_EXE%" -S . -B "%DFN_BUILD_DIR%" %*
 if errorlevel 1 exit /b 1
 
-"%CMAKE_EXE%" --build build --config Release
+"%CMAKE_EXE%" --build "%DFN_BUILD_DIR%" --config Release

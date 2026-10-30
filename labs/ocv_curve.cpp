@@ -4,22 +4,14 @@
 #include <iostream>
 #include <string_view>
 
+#include "dfn/thermo.hpp"
+
 namespace {
-
-// Illustrative half-cell OCP fits; replaced by the Chen2020 data in chapter 3.
-double negative_ocp(double x) {
-  const double one_minus_x = 1.0 - x;
-  return 0.05 + 0.8 * std::exp(-10.0 * x) + 0.1 * one_minus_x * one_minus_x;
-}
-
-double positive_ocp(double y) {
-  return 3.9 + 0.2 * (1.0 - y);
-}
 
 double open_circuit_voltage(double soc) {
   const double x = 0.10 + 0.75 * soc;
   const double y = 0.90 - 0.80 * soc;
-  return positive_ocp(y) - negative_ocp(x);
+  return dfn::positive_ocp(y).value - dfn::negative_ocp(x).value;
 }
 
 void print_usage() {

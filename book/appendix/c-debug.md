@@ -8,6 +8,11 @@
 | 残差变成 NaN | Jacobian 错误、BV 指数溢出 | 用有限差分对比解析 Jacobian |
 | 步长不断缩小 | 刚性误判、事件抖动 | 看步长历史与事件函数 |
 | KLU 报奇异 | 缺参考电位、装配漏行 | 检查对角元、零空间、行和 |
+| IDA 报 `IDA_LSETUP_FAIL` | 稀疏结构被清零、漏装配位置 | 看消息里的行列号；确认回调重写了 CSC 结构 |
+| `CscBuilder: entry (r,c) is not in the Jacobian pattern` | 装配写了模式里没有的位置 | 按行列号查是哪个块；模式和装配一起改 |
+| IDA 报 `IDA_LINESEARCH_FAIL`（-13） | 问题无解（如无电容时的电压阶跃）或初值太远 | 先问"问题有解吗"，再查初值 |
+| `IDACalcIC: id = NULL conflicts with icopt` | 没提供 `variable_types()` | 标出 1 = 微分、0 = 代数 |
+| IDA 报 `IDA_CONV_FAIL` | 初值差、Jacobian 错、容差过紧 | 先关 `calculate_consistent_initial` 手动给一致初值 |
 | 零电流下电压不等于 OCV | 参数不一致、OCP 插值错误 | 做零电流极限测试 |
 
 ## C.2 物理上不合理

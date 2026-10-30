@@ -4,6 +4,9 @@ out/
 cmake-build-*/
 CMakeUserPresets.json
 
+# Local third-party source/build cache
+.deps/
+
 # Logs
 *.log
 

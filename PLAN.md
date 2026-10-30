@@ -94,25 +94,40 @@ numerical-p2d/
 统一接口（第 8 章对照实验的基础）：
 
 ```cpp
-struct SolverOptions {
-  double rtol = 1e-6, atol = 1e-8;
-  std::vector<Event> events;
+class DaeModel {                       // 残差形式 F(t, y, y') = 0
+public:
+  virtual int size() const = 0;
+  virtual void residual(double t, const double* y, const double* yp,
+                        double* out) const = 0;
+  virtual CscPattern jacobian_pattern() const = 0;
+  virtual void jacobian(double t, const double* y, const double* yp, double cj,
+                        CscBuilder& out) const = 0;
+  virtual std::vector<int> variable_types() const;   // 1 = 微分, 0 = 代数
 };
 
-class DaeSolver {
-public:
-  virtual ~DaeSolver() = default;
-  virtual SolveReport integrate(IModel& model, Vec& y, double t0, double t_end) = 0;
+struct IdaOptions {
+  double rtol = 1e-6;
+  std::vector<double> atol;
+  double max_step = 0;
+  bool supply_jacobian = true;
+  bool calculate_consistent_initial = true;
+  LinearSolverKind linear_solver = LinearSolverKind::klu;
 };
+
+SolveReport ida_integrate(const DaeModel& model, const std::vector<double>& y0,
+                          const std::vector<double>& yp0, double t0,
+                          double t_end, const IdaOptions& options = {});
 ```
+
+手写 BDF2-DAE 使用同一个 `DaeModel`，只是时间推进换成固定步长，因此两套后端可以逐点对照。
 
 ## 7. 构建与依赖
 
 - C++20、CMake ≥ 3.24、vcpkg manifest（`vcpkg.json`）。
-- 依赖：`eigen3`、`sundials[klu]`、`pybind11`、`yaml-cpp`、`catch2`。
+- 依赖：`eigen3`、`sundials[klu]`（使用 `cmake/vcpkg-overlay` 的 overlay 端口）、`pybind11`、`yaml-cpp`、`catch2`。
 - `labs/` 下的单文件程序只依赖标准库，可独立编译，保证第 0–2 章不卡在环境上。
 - Python 侧用 `uv` 建独立 venv（numpy/matplotlib；pybamm 可选）。
-- 平台：Windows 主开发 + Linux 用于基准；无 KLU 时降级 banded。
+- 平台：Windows 主开发 + Linux 用于基准；无 SUNDIALS 时不构建 IDA 后端，IDA 内部可在 KLU 与稠密求解器之间切换。
 
 ## 8. 质量门禁
 
@@ -133,10 +148,10 @@ public:
 | --- | --- | --- |
 | 锂守恒 | 总量随时间漂移 | 相对误差 < 1e-10/步 |
 | 电荷守恒 | 离散电流恒等式 | 残差 < 1e-12 |
-| 空间收敛阶 | N 加倍 | 观测阶 ≥ 1.9 |
+| 空间收敛阶 | N 加倍 | 观测阶 ≥ 1.9（当前表面单侧差分约 1.4，二阶重构后达标） |
 | 时间收敛阶 | BDF2 vs 参考解 | 观测阶 ≥ 1.9 |
 | SPM 精度 | 与球扩散级数解对比 | 电压误差 < 1 mV |
-| DFN 回归 | 与 PyBaMM 同参数对比 | 电压 RMSE < 5 mV |
+| DFN 回归 | 与 PyBaMM 同参数对比 | 1C 电压 RMSE < 10 mV；≤C/4 时 < 3 mV（省略 $\kappa_D$） |
 | 后端一致性 | BDF2 vs IDAKLU | 状态差 < 10×tol |
 
 ### 8.3 试读门槛
@@ -152,7 +167,7 @@ public:
 | M2 | 第 3–4 章 | 模型定义 + FV 装配 | 守恒与二阶收敛 | 5–6 天 |
 | M3 | 第 5–6 章 | 稀疏后端 + Newton | 稳态 SPM/DFN 收敛 | 5–6 天 |
 | M4 | 第 7–8 章 | BDF2 + IDAKLU | 两后端逐点一致 | 5–6 天 |
-| M5 | 第 9 章 | CLI、验证矩阵、性能 | PyBaMM 电压 RMSE < 5 mV | 3–4 天 |
+| M5 | 第 9 章 | CLI、验证矩阵、性能 | 1C 电压 RMSE < 10 mV（PyBaMM，省略 $\kappa_D$） | 3–4 天 |
 | M6 | 第 10 章 + 附录 + 试读修订 | 全书与速查 | 命令可复现、试读通过 | 4–5 天 |
 
 ## 10. 风险与对策
