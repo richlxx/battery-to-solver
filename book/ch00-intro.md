@@ -129,7 +129,9 @@ uv pip install matplotlib
 uv run python scripts/plot_ocv.py ocv.csv
 ```
 
-你会看到一条从左下到右上的曲线，低 SOC 段更陡。这就是本章开头那张表背后的完整曲线。
+你会看到一条从左下到右上的曲线，低 SOC 段更陡（图 0.1）。这就是本章开头那张表背后的完整曲线。
+
+![图 0.1　示例开路电压曲线：低 SOC 段更陡](assets/fig00-ocv.svg)
 
 ### 第 4 步：读代码
 

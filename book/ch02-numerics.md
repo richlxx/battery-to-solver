@@ -132,11 +132,13 @@ build\Release\diff_error.exe > diff_error.csv
 uv run python scripts/plot_error.py diff_error.csv
 ```
 
-你会看到两条 log-log 曲线：
+你会看到两条 log-log 曲线（图 2.1）：
 
 - 前向差分的斜率约为 $-1$。
 - 中心差分的斜率约为 $-2$。
 - 步长非常小时，两条曲线都会翘起来——舍入误差开始占主导。
+
+![图 2.1　sin′(1) 的差分误差随步长变化：虚线是一阶与二阶参考斜率](assets/fig02-error.svg)
 
 ## 2.8 怎么读一条误差曲线
 
@@ -144,7 +146,7 @@ uv run python scripts/plot_error.py diff_error.csv
 
 1. **左侧**：步长太大，截断误差主导，斜率反映格式阶数。
 2. **中间**：截断误差和舍入误差平衡，误差最小。
-3. **右侧**：步长太小，两个相近的数相减，有效数字被"吃掉"，误差反而上升。
+3. **右侧**：步长太小，两个相近的数相减，有效数字被"吃掉"，误差反而上升（图 2.1 的右端）。
 
 所以"步长越小越好"是错的。存在一个最优点，量级大约是 $\sqrt{\epsilon}$（前向）到 $\epsilon^{1/3}$（中心），其中 $\epsilon\approx2.2\times10^{-16}$。
 
