@@ -25,6 +25,7 @@ add_library(dfn_core STATIC
   src/models/chain_dae.cpp
   src/thermo.cpp
   src/models/dfn.cpp
+  src/reduction/spm.cpp
   src/sim/config.cpp
   src/sim/simulation.cpp)
 target_include_directories(dfn_core PUBLIC
@@ -114,6 +115,10 @@ if(DFN_USE_KLU)
     add_executable(dfn_discharge labs/dfn_discharge.cpp)
     target_link_libraries(dfn_discharge PRIVATE dfn_ida)
     dfn_copy_runtime_dlls(dfn_discharge)
+
+    add_executable(spm_compare labs/spm_compare.cpp)
+    target_link_libraries(spm_compare PRIVATE dfn_ida)
+    dfn_copy_runtime_dlls(spm_compare)
   endif()
 endif()
 
@@ -161,6 +166,14 @@ if(BUILD_TESTING AND DFN_BUILD_TESTS)
     dfn_copy_runtime_dlls(dfn_sim_tests)
   endif()
 
+  add_executable(dfn_spm_tests tests/test_spm.cpp)
+  target_link_libraries(dfn_spm_tests PRIVATE dfn_core)
+  add_test(NAME dfn_spm_tests COMMAND dfn_spm_tests)
+  if(DFN_USE_KLU)
+    target_link_libraries(dfn_spm_tests PRIVATE dfn_ida)
+    dfn_copy_runtime_dlls(dfn_spm_tests)
+  endif()
+
   if(DFN_USE_KLU)
     add_test(NAME klu_probe COMMAND klu_probe)
 
@@ -176,6 +189,7 @@ if(BUILD_TESTING AND DFN_BUILD_TESTS)
 
     if(DFN_BUILD_LABS)
       add_test(NAME ida_compare_runs COMMAND ida_compare)
+      add_test(NAME spm_compare_runs COMMAND spm_compare)
     endif()
   endif()
   add_test(NAME dfn_sim_help COMMAND dfn-sim --help)

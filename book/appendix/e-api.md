@@ -49,3 +49,15 @@
 | `write_csv(report, path)` | CSV 输出 | `--out` |
 
 与 SUNDIALS 的对应关系：每个工况分段是一次 `ida_integrate`；`SimulationReport` 里的 `steps/jacobian_evals` 是各分段 `IDAGetNum*` 的累加；`event_index` 只用于分段内部判断是否切换，不进入 CSV。
+
+## E.5 降阶模型（第 10 章）
+
+| 本书接口 | 作用 | 对应方程 |
+| --- | --- | --- |
+| `SpmModel(params, n_r_neg, n_r_pos)` | 单颗粒模型，状态只有两个颗粒 + 两个表面浓度 | (10.1)–(10.3) |
+| `SpmModel::set_current_density(J)` | 反应电流由外加电流直接决定 | (10.1) |
+| `SpmModel::reaction_flux(positive)` | 均匀反应电流 $j$ | (10.1) |
+| `SpmModel::terminal_voltage(y)` | $U_{\mathrm{pos}}-U_{\mathrm{neg}}+\eta_{\mathrm{pos}}-\eta_{\mathrm{neg}}$，过电位用标量 Newton 反解 | (10.2)(10.3) |
+| `particle_lithium / average_stoichiometry` | 颗粒锂存量与平均化学计量数 | — |
+
+SPM 与 DFN 共用 `DaeModel`、`ida_integrate` 和 `CscBuilder`，所以对比实验只需要换模型对象；`labs/spm_compare.cpp` 就是同一个积分循环跑两遍。
