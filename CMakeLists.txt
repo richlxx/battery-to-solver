@@ -9,7 +9,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(DFN_BUILD_LABS "Build standalone teaching labs" ON)
 option(DFN_BUILD_TESTS "Build tests" ON)
 option(DFN_USE_KLU "Enable the SUNDIALS IDA + KLU backend" OFF)
-option(DFN_BUILD_PYTHON "Build pybind11 bindings" OFF)
 
 add_library(dfn_core STATIC
   src/params.cpp
@@ -201,10 +200,4 @@ if(BUILD_TESTING AND DFN_BUILD_TESTS)
     add_test(NAME euler_stiff_runs COMMAND euler_stiff)
     add_test(NAME bdf2_demo_runs COMMAND bdf2_demo)
   endif()
-endif()
-
-if(DFN_BUILD_PYTHON)
-  find_package(pybind11 CONFIG REQUIRED)
-  pybind11_add_module(dfn_py bindings/python.cpp)
-  target_link_libraries(dfn_py PRIVATE dfn_core)
 endif()
