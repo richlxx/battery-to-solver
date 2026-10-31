@@ -340,3 +340,18 @@ build-klu\Release\ida_compare.exe
 2. 用 `max_step=0.001` 强制小步长，记录步数与 Jacobian 次数的比值，解释 IDA 的复用策略何时失效。
 3. 仿照 `tests/test_ida.cpp` 里的 `BrokenPatternModel`，把稀疏模式删掉一项，复现 `IDA_LSETUP_FAIL`，并从错误信息定位到具体位置。
 4. 用 `LinearSolverKind::dense` 跑 320 格算例，与 KLU 对比耗时，解释差距的来源。
+
+## 答案
+
+**检查点**
+
+1. 对应 `bdf2_dae_integrate` 内部传给 `newton_solve` 的残差 lambda，最终调用模型的 `residual(t, y, yp, out)`。区别只是调用方从你的循环变成了 IDA。
+2. 非零位置只由方程的连接关系决定，$t,y,\dot y$ 变化不会改变结构。KLU 的符号分析（排序、填充预测）依赖结构，可以复用；数值分解依赖具体数值，每次都要重做。
+3. 步数明显增加，误差先快速下降，随后在某个水平停滞（受方法误差、问题条件和双精度舍入限制）。容差过紧还可能触发 `IDA_TOO_MUCH_ACC`，或者让步长塌缩到下限。
+
+**练习提示**
+
+1. 本机数据在 `rtol=1e-7` 附近出现拐点：再收到 1e-9，误差只降约 6 倍，步数却增加 60%。拐点随问题和机器略有移动，判断标准是"误差不再随容差成比例下降"。
+2. `max_step` 变小后，步数被迫增加，Jacobian 复用窗口缩短，`jac_evals` 会接近步数。用 `ida_compare` 的统计输出可以直接看到比值变化。
+3. 参考 `tests/test_ida.cpp` 里的 `BrokenPatternModel`：模式只保留 `(0,0)` 和 `(1,1)`，回调写 `(0,1)` 时 `CscBuilder` 抛出 `entry (0,1) is not in the Jacobian pattern`，IDA 最终返回 `IDA_LSETUP_FAIL`。
+4. 320 格（$n=640$）：KLU 约 2.0 ms，稠密约 104 ms。稠密每次分解是 $O(n^3)$ 且要存 $n^2$ 个数；这个模型的 Jacobian 只有约 $2.5n$ 个非零元，KLU 的分解代价近似线性增长。

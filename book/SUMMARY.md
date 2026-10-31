@@ -42,5 +42,4 @@
 * [附录 C 调试清单与失败模式](appendix/c-debug.md)
 * [附录 D 术语表（中英对照）](appendix/d-glossary.md)
 * [附录 E API 对照表](appendix/e-api.md)
-* [附录 F 习题提示与答案](appendix/f-answers.md)
-* [附录 G 参考文献](appendix/g-refs.md)
+* [附录 F 参考文献](appendix/f-refs.md)
