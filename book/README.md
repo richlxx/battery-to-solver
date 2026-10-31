@@ -57,7 +57,7 @@ scripts/    构建、画图与对比脚本
 ## 阅读入口
 
 - [全书目录](SUMMARY.md)
-- 写作计划与里程碑：[PLAN.md](../PLAN.md)
+- 写作计划与里程碑：[PLAN.md](https://github.com/richlxx/battery-to-solver/blob/main/PLAN.md)
 
 ## 可选组件
 
