@@ -222,9 +222,43 @@ ctest --test-dir build -C Release -R "dfn_linear_tests" --output-on-failure
 
 ## 代码
 
-- `include/dfn/linalg/dense.hpp`、`src/linalg/dense.cpp`：带选主元的 LU。
-- `include/dfn/linalg/tridiagonal.hpp`、`src/linalg/tridiagonal.cpp`：Thomas 算法。
-- `labs/linear_solve.cpp`：规模对比实验。
+**文件地图**
+
+| 文件 | 作用 |
+| --- | --- |
+| `include/dfn/linalg/dense.hpp` / `src/linalg/dense.cpp` | 带选主元的 LU，分解一次可复用 |
+| `include/dfn/linalg/tridiagonal.hpp` / `src/linalg/tridiagonal.cpp` | 三对角专用 Thomas 算法 |
+| `labs/linear_solve.cpp` | 稠密 LU 与 Thomas 的规模/精度对比 |
+
+**核心片段：Thomas 算法的前代与回代**
+
+```cpp
+c[0] = (n > 1) ? A.upper[0] / A.diag[0] : 0.0;
+d[0] = b[0] / A.diag[0];
+
+for (int i = 1; i < n; ++i) {
+  const double denominator =
+      A.diag[i] - A.lower[i] * c[i - 1];
+  c[i] = (i + 1 < n) ? A.upper[i] / denominator : 0.0;
+  d[i] = (b[i] - A.lower[i] * d[i - 1]) / denominator;
+}
+
+x[n - 1] = d[n - 1];
+for (int i = n - 2; i >= 0; --i) {
+  x[i] = d[i] - c[i] * x[i + 1];
+}
+```
+
+Thomas 算法是“只针对三对角”的 LU：前代把每条对角线上的元素消掉，回代从上往下解。因为每行只有三个非零元，整个过程是 $O(n)$，而稠密 LU 是 $O(n^3)$。`labs/linear_solve.cpp` 用 $N=50,100,200,400$ 的对角占优系统比较两者，输出耗时和最大误差。
+
+稠密版本仍保留在 `dense.cpp`，用于第 6 章的 Newton 教学实现和小规模调试；规模上来以后，第 8 章换成 KLU。三对角接口直接接收第 4 章的 `TridiagonalMatrix`，所以离散和线性求解之间不需要复制矩阵。
+
+```bat
+scripts\build_msvc.bat
+build\Release\linear_solve.exe
+```
+
+看 `n` 翻倍时两列耗时的增长：Thomas 近似线性，稠密 LU 明显更陡。再改一下对角线数值，让矩阵接近奇异，观察 `zero pivot` 异常。
 
 ## 练习
 

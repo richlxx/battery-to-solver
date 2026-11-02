@@ -327,12 +327,50 @@ build-klu\Release\ida_compare.exe
 
 ## 代码
 
-- `include/dfn/solvers/dae.hpp`、`src/solvers/dae.cpp`：DAE 接口、CSC 模式、CSC 装配器、差分 Jacobian。
-- `include/dfn/models/chain_dae.hpp`、`src/models/chain_dae.cpp`：刚性链教学模型与解析解。
-- `include/dfn/solvers/bdf2_dae.hpp`、`src/solvers/bdf2_dae.cpp`：手写 BDF2-DAE，与 IDA 共用残差。
-- `include/dfn/solvers/idaklu.hpp`、`src/solvers/idaklu.cpp`：IDA + KLU 后端。
-- `tests/klu_probe.cpp`、`tests/test_dae.cpp`、`tests/test_ida.cpp`：本章测试。
-- `labs/ida_compare.cpp`：容差、求解器、规模的对照实验。
+**文件地图**
+
+| 文件 | 作用 |
+| --- | --- |
+| `include/dfn/solvers/dae.hpp` / `src/solvers/dae.cpp` | DAE 接口、CSC 模式、`CscBuilder` |
+| `include/dfn/models/chain_dae.hpp` / `src/models/chain_dae.cpp` | 刚性链教学模型与解析解 |
+| `include/dfn/solvers/bdf2_dae.hpp` / `src/solvers/bdf2_dae.cpp` | 手写 BDF2-DAE，与 IDA 共用残差 |
+| `include/dfn/solvers/idaklu.hpp` / `src/solvers/idaklu.cpp` | IDA + KLU 后端 |
+| `tests/klu_probe.cpp`、`tests/test_dae.cpp`、`tests/test_ida.cpp` | 本章测试 |
+| `labs/ida_compare.cpp` | 容差、求解器、规模的对照实验 |
+
+**核心片段：同一个 `DaeModel`，两套时间推进**
+
+```cpp
+const double a0 = use_bdf2 ? 3.0 / (2.0 * dt) : 1.0 / dt;
+
+const auto residual = [&](const std::vector<double>& y) {
+  for (int j = 0; j < n; ++j) {
+    yp[j] = use_bdf2
+        ? (3.0 * y[j] - 4.0 * y_curr[j] + y_prev[j]) /
+              (2.0 * dt)
+        : (y[j] - y_curr[j]) / dt;
+  }
+  model.residual(t_new, y.data(), yp.data(),
+                 residual_buffer.data());
+  return residual_buffer;
+};
+
+const auto jacobian = [&](const std::vector<double>& y) {
+  // 先按当前 y 重算 yp，再交给模型的解析 Jacobian
+  return dense_jacobian(model, t_new, y.data(), yp.data(), a0);
+};
+```
+
+这段代码来自 `bdf2_dae_integrate`：它先用 BDF 公式把 $y'$ 表示成当前 $y$ 和历史的线性组合，再调用 `model.residual`。`a0` 是 BDF 的步长因子，对应 IDA 回调里的 `cj`；`dense_jacobian(..., a0)` 会把 `dF/dy + cj * dF/dy'` 组装出来。
+
+关键不是这十几行，而是**接口**：`model` 只认 `residual`、`jacobian_pattern`、`jacobian` 和 `variable_types`。手写 BDF2-DAE 和 IDA 调的是同一个对象，所以第 9 章可以逐点对照两条后端。教学版用稠密 Jacobian；生产版把同一个稀疏模式交给 KLU。
+
+```bat
+ctest --test-dir build-klu -C Release -R "dfn_dae_tests|dfn_ida_tests|ida_compare_runs" --output-on-failure
+build-klu\Release\ida_compare.exe
+```
+
+先看 `ida_compare` 的步数与 Jacobian 次数，再把 `supply_jacobian` 改成 false（只允许稠密求解器），比较内部差分 Jacobian 的结果和耗时。
 
 ## 练习
 

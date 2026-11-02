@@ -190,9 +190,41 @@ double open_circuit_voltage(double soc) {
 
 ## 代码
 
-- `labs/ocv_curve.cpp`：本章的 OCV 实验。
-- `scripts/plot_ocv.py`：读取 CSV 并画图。
-- `scripts/build_msvc.bat`：Windows 一键构建。
+**文件地图**
+
+| 文件 | 作用 |
+| --- | --- |
+| `labs/ocv_curve.cpp` | 按 SOC 采样，输出 `soc,sto_neg,sto_pos,ocv_v` 四列 CSV |
+| `scripts/plot_ocv.py` | 读取 CSV，画 SOC–OCV 曲线 |
+| `scripts/build_msvc.bat` | Windows 一键构建所有 lab |
+
+**核心片段：把 SOC 变成四列 CSV**
+
+```cpp
+std::cout << "soc,sto_neg,sto_pos,ocv_v\n"
+          << std::fixed << std::setprecision(6);
+
+for (int k = 0; k < n; ++k) {
+  const double soc =
+      static_cast<double>(k) / static_cast<double>(n - 1);
+  const double x = 0.10 + 0.75 * soc;
+  const double y = 0.90 - 0.80 * soc;
+  std::cout << soc << ',' << x << ',' << y << ','
+            << open_circuit_voltage(soc) << '\n';
+}
+```
+
+这段循环做了三件事：把整数下标 `k` 归一化成 $[0,1]$ 的 SOC；用两个线性映射把 SOC 变成负极和正极的化学计量数；调用 `open_circuit_voltage` 得到端电压。`n` 是采样点数，`--n 101` 就是 101 个等距点。
+
+CSV 的第一行是表头，后面每行是一组样本。把输出重定向到文件，绘图脚本只认列名，不关心中间怎么算：
+
+```bat
+scripts\build_msvc.bat
+build\Release\ocv_curve.exe --n 101 > ocv.csv
+uv run python scripts/plot_ocv.py ocv.csv
+```
+
+先改 `--n` 看曲线是否变光滑，再改 `x`、`y` 的映射看曲线如何移动。这就是本章的“改参数”练习：不用碰 OCP 函数，也能观察模型假设对结果的影响。
 
 ## 练习
 

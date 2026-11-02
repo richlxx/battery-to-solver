@@ -266,6 +266,55 @@ ctest --test-dir build-cuda -C Release -R spm_batch_check --output-on-failure
 
 `dfn_fit_tests` 检查三件事：固定步长格式在放电与充电下都与 IDA 一致（误差小于 0.2 mV）；无噪声数据能恢复到 $10^{-10}$；LM 能收敛。`spm_batch_check` 比较 GPU 与 CPU 的 9 个电压探针，实测最大差 $1.2\times10^{-13}$ V。
 
+## 代码
+
+文件地图与完整构建命令见 11.8 节；这里补 LM 最核心的两段实现。
+
+**核心片段：前向差分 Jacobian 与阻尼正规方程**
+
+```cpp
+for (int j = 0; j < n; ++j) {
+  trial = theta;
+  trial[j] += options.step;
+  if (!evaluate(trial, r_perturbed)) {
+    return result;
+  }
+  const double scale = 1.0 / options.step;
+  for (std::size_t i = 0; i < m; ++i) {
+    jacobian[i][j] = (r_perturbed[i] - r[i]) * scale;
+  }
+}
+
+for (int i = 0; i < n; ++i) {
+  for (int j = 0; j < n; ++j) {
+    double sum = 0.0;
+    for (std::size_t k = 0; k < m; ++k) {
+      sum += jacobian[k][i] * jacobian[k][j];
+    }
+    normal[i][j] = sum;
+  }
+  for (std::size_t k = 0; k < m; ++k) {
+    gradient[i] += jacobian[k][i] * r[k];
+  }
+}
+```
+
+第一段对每个参数做一次前向扰动，得到 $\partial r/\partial\theta_j$；$n$ 个参数就要 $n$ 次正演。第二段组装正规方程 $J^\mathsf{T}J$ 和 $J^\mathsf{T}r$。随后在迭代里给对角线加阻尼：
+
+```cpp
+system[i][i] += lambda * (normal[i][i] + 1e-12);
+delta = solve_dense(system, rhs);
+```
+
+$lambda$ 大时接近梯度下降，小时接近 Gauss–Newton。新步被接受就减小 $lambda$，否则增大并回溯；这就是第 11.4 节说的“先用稳定的小步靠近，再用二次收敛收尾”。
+
+```bat
+ctest --test-dir build-klu -C Release -R dfn_fit_tests --output-on-failure
+build-klu\Release\param_fit.exe --protocol c --fit --data results\fit_c.csv --starts 8
+```
+
+先看 `--starts 8` 是否都收敛到同一组参数，再把 `--noise` 调大，观察置信区间和条件数的变化。
+
 ## 11.9 检查点
 
 1. 为什么参数要取对数？为什么全电池数据不能同时定出两个电极的 $k$？
