@@ -315,6 +315,93 @@ def grid_figure():
     save(fig, "fig04-grid.svg")
 
 
+def ladder_figure():
+    fig, ax = plt.subplots(figsize=(9.2, 3.6))
+
+    specs = [
+        (0.10, "SPM",
+         "每电极 1 个颗粒\n球扩散 + BV\n反应均匀，无电解液梯度\n$n\\approx 2N_r+2$",
+         PALE_GRAY),
+        (1.30, "SPMe",
+         "SPM + 电解液\n$c_e(x),\\phi_e(x)$\n反应仍均匀，无固相电位梯度\n$n\\approx 2N_r+2+2N_x$",
+         PALE_BLUE),
+        (2.50, "DFN",
+         "全部场随 $x,r$ 变化\n局部 BV 耦合\n两个电位都有空间分布\n$n=168$（默认）",
+         "#cfe0f2"),
+    ]
+    for x, title, body, fill in specs:
+        ax.add_patch(FancyBboxPatch(
+            (x, 0.25), 0.95, 0.62,
+            boxstyle="round,pad=0.012,rounding_size=0.02",
+            linewidth=1.2, edgecolor="#5b616b", facecolor=fill))
+        ax.text(x + 0.475, 0.78, title, ha="center", va="center",
+                fontsize=12, fontweight="bold")
+        ax.text(x + 0.475, 0.49, body, ha="center", va="center",
+                fontsize=8.4, linespacing=1.55)
+
+    arrow(ax, (1.08, 0.56), (1.27, 0.56), color=ORANGE)
+    arrow(ax, (2.28, 0.56), (2.47, 0.56), color=ORANGE)
+    ax.text(1.175, 0.10, "+ 电解液", ha="center", fontsize=8.5,
+            color=ORANGE)
+    ax.text(2.375, 0.10, "+ 固相电位\n+ 局部反应", ha="center", fontsize=8.5,
+            color=ORANGE, linespacing=1.4)
+
+    ax.text(0.10, 1.02, "更简单 / 更快", fontsize=8.5, color=GRAY)
+    ax.text(3.45, 1.02, "更完整 / 更贵", fontsize=8.5, color=GRAY,
+            ha="right")
+
+    ax.set_xlim(-0.05, 3.55)
+    ax.set_ylim(0.0, 1.08)
+    ax.set_axis_off()
+    ax.set_title("模型阶梯：每一步只加一类物理")
+    save(fig, "fig03-ladder.svg")
+
+
+def onion_figure():
+    fig, ax = plt.subplots(figsize=(6.2, 4.4))
+
+    shells = [(1.0, PALE_GRAY), (0.72, PALE_BLUE), (0.45, "#cfe0f2")]
+    for radius, fill in shells:
+        ax.add_patch(Circle((0, 0), radius, facecolor=fill,
+                            edgecolor=BLUE, lw=1.1))
+    ax.plot([0], [0], "o", color=ORANGE, ms=5)
+
+    faces = [0.45, 0.72, 1.0]
+    angles = [90.0, 150.0, 30.0]
+    labels = ["$F_1$", "$F_2$", "$F_3=j$"]
+    text_positions = [(0.07, 0.64), (-0.82, 0.48), (1.02, 0.60)]
+    for radius, angle, label, position in zip(faces, angles, labels,
+                                              text_positions):
+        a = np.radians(angle)
+        unit = np.array([np.cos(a), np.sin(a)])
+        arrow(ax, unit * (radius - 0.13), unit * (radius + 0.13),
+              color=ORANGE)
+        ax.text(*position, label, color=ORANGE, fontsize=9.5, va="center")
+
+    ax.text(0.18, 0.18, "层 0", fontsize=9.5, ha="center")
+    ax.text(-0.41, -0.41, "层 1", fontsize=9.5, ha="center")
+    ax.text(0.55, -0.62, "层 2", fontsize=9.5, ha="center")
+
+    ax.plot([0, 1.12], [0, 0], color=GRAY, lw=0.6, ls=":")
+    arrow(ax, (1.02, 0), (1.14, 0), color=GRAY, style="-|>")
+    ax.text(1.16, 0.04, "$r$", fontsize=9.5)
+    for k, radius in enumerate(faces, start=1):
+        ax.plot([radius, radius], [0.0, -0.05], color=GRAY, lw=0.8)
+        ax.text(radius, -0.16, f"$r_{k}$", fontsize=9, ha="center")
+
+    ax.text(0.0, -1.28,
+            "$V_i=\\frac{4\\pi}{3}(r_{i+1}^3-r_i^3),\\quad A_i=4\\pi r_i^2$",
+            ha="center", fontsize=9.5)
+    ax.text(0.0, -1.48, "未知量在层心，通量在界面", ha="center", fontsize=9)
+
+    ax.set_xlim(-1.25, 1.45)
+    ax.set_ylim(-1.6, 1.2)
+    ax.set_aspect("equal")
+    ax.set_axis_off()
+    ax.set_title("球坐标：三层洋葱模型")
+    save(fig, "fig04-onion.svg")
+
+
 def sparsity_figure():
     stdout, _ = run([exe("sparsity_map")])
     blocks = []
@@ -936,7 +1023,9 @@ def main():
         "tangent": tangent_figure,
         "error": error_figure,
         "dfn": dfn_figure,
+        "ladder": ladder_figure,
         "grid": grid_figure,
+        "onion": onion_figure,
         "sparsity": sparsity_figure,
         "fill": fill_figure,
         "newton": newton_figure,

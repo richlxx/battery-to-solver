@@ -165,8 +165,37 @@ uv run python scripts/plot_error.py diff_error.csv
 
 ## 代码
 
-- `labs/diff_error.cpp`：差分误差实验。
-- `scripts/plot_error.py`：log-log 误差图。
+**文件地图**
+
+| 文件 | 作用 |
+| --- | --- |
+| `labs/diff_error.cpp` | 计算 $\sin'(1)$ 的前向/中心差分误差，输出 CSV |
+| `scripts/plot_error.py` | 画 log-log 误差曲线 |
+
+**核心片段：步长减半 48 次**
+
+```cpp
+const double x = 1.0;
+const double exact = std::cos(x);
+
+for (int k = 0; k < 48; ++k) {
+  const double h = 0.1 * std::pow(0.5, k);
+  const double forward = (std::sin(x + h) - std::sin(x)) / h;
+  const double central = (std::sin(x + h) - std::sin(x - h)) / (2.0 * h);
+  std::cout << h << ',' << forward << ',' << central << ','
+            << std::abs(forward - exact) << ','
+            << std::abs(central - exact) << '\n';
+}
+```
+
+每一轮把 $h$ 减半，同时算前向差分和中心差分。前向差的误差按 $O(h)$ 下降，中心差按 $O(h^2)$ 下降；在 log-log 图上，斜率分别是 $-1$ 和 $-2$。循环从 $h=0.1$ 走到约 $10^{-15}$，右端会看到误差重新翘起——那是舍入误差开始主导。
+
+```bash
+build\Release\diff_error.exe > diff_error.csv
+uv run python scripts/plot_error.py diff_error.csv
+```
+
+把 `forward` 换成前向差、`central` 换成中心差，或者改 `x`、改函数，曲线斜率会告诉你格式的阶数。`scripts/plot_error.py` 只读 `h`、`forward_err`、`central_err` 三列，不依赖具体函数。
 
 ## 练习
 

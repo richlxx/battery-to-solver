@@ -193,12 +193,42 @@ $$
 
 ## 代码
 
-- `labs/euler_decay.cpp`：把 1.4 的两个模式放进程序。第一段对比 $y'=-y$ 的欧拉解与精确解；第二段扫步长，看 $\lambda=-100$ 的显式解在 $h>0.02$ 时发散；第三段把两个模式放在一起，慢模式正常、快模式失控。
+**文件地图**
+
+| 文件 | 作用 |
+| --- | --- |
+| `labs/euler_decay.cpp` | 欧拉法、稳定性扫描、两个模式对比 |
+| `scripts/build_msvc.bat` | Windows 一键构建 |
+
+**核心片段：一步欧拉与稳定性扫描**
+
+```cpp
+std::vector<double> euler(double lambda, double h, int steps) {
+  std::vector<double> y(steps + 1, 1.0);
+  for (int i = 0; i < steps; ++i) {
+    y[i + 1] = y[i] + h * lambda * y[i];
+  }
+  return y;
+}
+
+for (double h : {0.05, 0.02, 0.01, 0.005}) {
+  const int steps = static_cast<int>(std::lround(0.2 / h));
+  const auto y = euler(-100.0, h, steps);
+  std::cout << h << ',' << steps << ',' << max_abs(y) << ','
+            << y.back() << '\n';
+}
+```
+
+第一段循环就是显式欧拉：$y_{n+1}=y_n+h\lambda y_n$。把公因子提出，得到放大因子 $g=1+h\lambda$；稳定性要求 $|g|<1$，也就是 $h<2/|\lambda|$。对 $\lambda=-100$，边界是 $h=0.02$。
+
+第二段扫描 $h$ 并打印 `max_abs(y)`：$h=0.05$ 时 $|g|=4$，解在正负之间放大；$h=0.02$ 时 $|g|=1$，停在边界；$h\le0.01$ 才真正衰减。程序最后把 $\lambda=-1$ 与 $-100$ 两个模式并排跑，看到慢模式正常、快模式失控——这就是后面“刚性”的直观来源。
 
 ```bat
 scripts\build_msvc.bat
 build\Release\euler_decay.exe
 ```
+
+输出是 CSV 风格的文本，可以直接粘进表格；先改 `h` 列表，再改 `lambda`，观察稳定边界怎么移动。
 
 ## 练习
 

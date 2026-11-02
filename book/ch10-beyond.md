@@ -12,45 +12,11 @@
 
 ## 10.1 更简单的模型：SPM
 
-第 9 章的 DFN 有 168 个未知量，其中大部分在描述"电解液里的浓度和电位怎么随位置变化"。如果这些变化不重要，就可以把它们全部删掉，只留下两个颗粒。
+第 3 章把模型排成 SPM → SPMe → DFN 的阶梯；本节不再重复推导，只回答两个问题：SPM 能省多少，什么时候会错。
 
-**单颗粒模型（SPM）** 做了两个假设：
+SPM 的假设和方程见 3.3 节：每个电极只有一个颗粒，反应电流均匀，电解液不参与。颗粒内部仍是完整的球扩散 (3.1)(3.2)，界面用 Butler–Volmer (3.3)(3.4)，反应电流由外加电流直接给出 (3.5)，端电压由 (3.6) 计算。
 
-1. 每个电极只用一个球形颗粒代表，颗粒内的扩散仍然是完整的。
-2. 反应电流在电极厚度上均匀，电解液不参与（浓度恒定、无欧姆压降）。
-
-假设 2 让反应电流不再是未知量，而是由外加电流直接决定：
-
-$$
-j_{\mathrm{neg}}=\frac{I}{a_{s,\mathrm{neg}}F L_{\mathrm{neg}}},\qquad
-j_{\mathrm{pos}}=-\frac{I}{a_{s,\mathrm{pos}}F L_{\mathrm{pos}}}
-\tag{10.1}
-$$
-
-其中 $a_s=3(1-\varepsilon)/R$ 是比表面积，$L$ 是电极厚度，$I$ 是电流密度（A/m²）。放电时 $j_{\mathrm{neg}}>0$（锂离开负极颗粒），$j_{\mathrm{pos}}<0$（锂进入正极颗粒）。
-
-颗粒内部的方程与 DFN 完全相同：球扩散 (3.2) 加上表面通量条件 (9.3)，表面浓度仍用代数方程 (9.4) 表示。区别只有两点：没有 $x$ 网格，每个电极只有一个颗粒；表面通量是常数，不再由局部电位决定。
-
-电压由两部分组成：
-
-$$
-V=U_{\mathrm{pos}}(y_s)-U_{\mathrm{neg}}(x_s)+\eta_{\mathrm{pos}}-\eta_{\mathrm{neg}}
-\tag{10.2}
-$$
-
-$U$ 是表面化学计量数对应的开路电位，$\eta$ 是界面过电位。过电位由 Butler–Volmer 反解：
-
-$$
-j=\frac{i_0}{F}\left(e^{\alpha_a f\eta}-e^{-\alpha_c f\eta}\right),
-\qquad f=\frac{F}{RT}
-\tag{10.3}
-$$
-
-给定 $j$ 和表面浓度，$i_0$ 已知，(10.3) 是一个关于 $\eta$ 的标量方程。代码里用几步 Newton 解它（`SpmModel::surface_overpotential`），因为 $j(\eta)$ 单调，收敛很快。
-
-状态向量只有 $n_r^{\mathrm{neg}}+n_r^{\mathrm{pos}}+2$ 个：两个颗粒的球内浓度，加两个表面浓度。取 $n_r=8/8$ 时 $n=18$，约为 DFN（168）的九分之一。为让参考解更准，表 10.1 的 SPM 用了 $20/20$，即 $n=42$。
-
-**一个有意思的结果**：由于 $j$ 是外部输入，SPM 的残差对状态是**线性**的（球扩散 + 线性表面约束），只有电压计算是非线性的。解析 Jacobian 因此与状态无关，一次装配可以反复使用。
+代码里对应 `SpmModel`（`include/dfn/reduction/spm.hpp`）。状态只有两个颗粒的球内浓度和两个表面浓度，取 $n_r=8/8$ 时 $n=18$，约为 DFN（168）的九分之一。为让参考解更准，表 10.1 的 SPM 用了 $20/20$，即 $n=42$。由于 $j$ 是外部输入，SPM 的残差对状态是**线性**的（球扩散 + 线性表面约束），只有电压计算是非线性的；解析 Jacobian 与状态无关，一次装配可以反复使用。
 
 实测对比（DFN 用 $8/4/8$、$6/6$，SPM 用 $n_r=20/20$，同一组参数，放电到 3.5 V）：
 
@@ -78,7 +44,7 @@ $$
 
 **什么时候不能用 SPM？** 电解液成为瓶颈的时候：高倍率、厚电极、低电导率电解液、低温。判断方法是拿 DFN 在目标工况下算一次（就像表 10.1），看误差是否在你的容差内。
 
-**SPMe 是什么？** 在 SPM 上加回电解液的**一阶**修正：保留电解液浓度与电位方程，但仍假设反应电流均匀，并忽略固相电位的空间分布。电压多出一项电解液浓差与欧姆压降。它比 SPM 准、比 DFN 便宜，是控制与 BMS 里最常用的折中。本书没有单独实现 SPMe：它的电解液方程与 DFN 完全相同（第 3 章的 (3.3)、(3.8)），只是反应源项换成常数 $j$，读者可以以 DFN 代码为骨架自行裁剪。
+**SPMe 是什么？** 第 3 章 3.4 节给出了 SPMe 的方程：在 SPM 上加回电解液浓度与电位 (3.7)–(3.10)，但仍假设反应均匀、固相电位均匀。它比 SPM 准、比 DFN 便宜，是控制与 BMS 里最常用的折中。本书没有单独实现 SPMe：它的方程可以从 DFN 代码裁剪，读者可以以 DFN 为骨架自行实现。
 
 ## 10.2 参数辨识与敏感性
 
@@ -89,7 +55,7 @@ $$
 $$
 S_p=\frac{\partial Q/Q}{\partial p/p}
 \approx\frac{Q(p(1+\delta))-Q(p(1-\delta))}{2\delta\,Q(p)}
-\tag{10.4}
+\tag{10.1}
 $$
 
 $S_p=+1$ 表示结果与参数同比例变化；$S_p=0$ 表示这个实验对参数完全不敏感。
@@ -133,7 +99,7 @@ DFN 的单次仿真在毫秒级，但 BMS 要在毫秒级完成**估计与优化
 
 $$
 y(t)\approx\Phi a(t),\qquad \Phi\in\mathbb{R}^{n\times r},\ r\ll n
-\tag{10.5}
+\tag{10.2}
 $$
 
 把近似代入方程并左乘 $\Phi^\mathsf{T}$，得到 $r$ 维的小系统。非线性项（反应电流）可以用 DEIM 只在少数点上求值再插值。对本模型，$r=10$ 左右常能保留主要动态。
@@ -152,7 +118,7 @@ $$
 
 $$
 \rho c_p\frac{\partial T}{\partial t}=\nabla\cdot(k_T\nabla T)+Q_{\mathrm{irr}}+Q_{\mathrm{rev}}
-\tag{10.6}
+\tag{10.3}
 $$
 
 $Q_{\mathrm{irr}}$ 是不可逆热（过电位与欧姆损耗），$Q_{\mathrm{rev}}$ 是可逆热（熵变）。每个 $x$ 节点多一个温度未知量，参数变成 $T$ 的函数。
@@ -177,7 +143,7 @@ $Q_{\mathrm{irr}}$ 是不可逆热（过电位与欧姆损耗），$Q_{\mathrm{r
 **电池建模**
 
 - Newman & Thomas-Alyea, *Electrochemical Systems*：多孔电极理论的原典。
-- Doyle, Fuller, Newman (1993)：DFN 的原始论文，方程 (3.1)–(3.10) 的来源。
+- Doyle, Fuller, Newman (1993)：DFN 的原始论文，第 3 章 DFN 方程总表的来源。
 - Marquis et al. (2019), *An asymptotic derivation of a single particle model...*：SPM/SPMe 的系统推导。
 - Chen et al. (2020)：一套完整的 DFN 参数集，第 9 章提到的替换目标。
 
@@ -198,7 +164,48 @@ $Q_{\mathrm{irr}}$ 是不可逆热（过电位与欧姆损耗），$Q_{\mathrm{r
 
 ## 代码
 
-`include/dfn/reduction/spm.hpp`、`src/reduction/spm.cpp`、`labs/spm_compare.cpp`、`scripts/sensitivity.py`、`tests/test_spm.cpp`
+**文件地图**
+
+| 文件 | 作用 |
+| --- | --- |
+| `include/dfn/reduction/spm.hpp` / `src/reduction/spm.cpp` | SPM 的 `DaeModel` 实现 |
+| `labs/spm_compare.cpp` | SPM 与 DFN 同工况对比 |
+| `scripts/sensitivity.py` | 参数敏感性扫描 |
+| `tests/test_spm.cpp` | SPM 电压、守恒与线性 Jacobian |
+
+**核心片段：表面浓度约束与端电压**
+
+```cpp
+out[surf_neg_] =
+    (y[surf_neg_] - y[cs_neg(n_r_neg_ - 1)] + alpha_neg_ * j_neg) *
+    eq_scale_surface_neg_;
+out[surf_pos_] =
+    (y[surf_pos_] - y[cs_pos(n_r_pos_ - 1)] + alpha_pos_ * j_pos) *
+    eq_scale_surface_pos_;
+
+double SpmModel::terminal_voltage(const double* y) const {
+  const double cs_neg_surf = y[surf_neg_];
+  const double cs_pos_surf = y[surf_pos_];
+  const double u_neg = open_circuit(params_.neg, false, cs_neg_surf);
+  const double u_pos = open_circuit(params_.pos, true, cs_pos_surf);
+  const double eta_neg =
+      surface_overpotential(params_.neg, false, cs_neg_surf);
+  const double eta_pos =
+      surface_overpotential(params_.pos, true, cs_pos_surf);
+  return u_pos - u_neg + eta_pos - eta_neg;
+}
+```
+
+表面浓度是代数未知量：它等于最外层格子值减去 $\alpha j$，其中 $j$ 由 (3.5) 直接给出，不依赖状态。径向扩散和这条约束都是线性的，所以 `jacobian()` 里的固体部分与状态无关，可以一次装配反复使用。
+
+端电压则是非线性的：`open_circuit` 查 OCP，`surface_overpotential` 用几步标量 Newton 反解 (3.3)。这就是第 3 章说的“残差线性、电压非线性”。
+
+```bat
+ctest --test-dir build -C Release -R dfn_spm_tests --output-on-failure
+build-klu\Release\spm_compare.exe
+```
+
+先看 `spm_compare` 的 1C/2C 电压差，再把 `main()` 里的 `SpmModel spm(params, 20, 20)` 改成 `8, 8`，观察 SPM 自身是否收敛；最后把电流列表加到 72 A/m²，看均匀反应假设在 2C 下是否还成立。
 
 ## 练习
 

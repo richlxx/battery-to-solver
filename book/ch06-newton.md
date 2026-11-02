@@ -78,7 +78,7 @@ $$
 
 每次迭代都要解一个线性方程组。第 5 章的 LU 分解正好派上用场：如果 Jacobian 结构不变，还可以复用符号分解。
 
-对电池问题，$F$ 包含所有离散方程，$J$ 的非零模式和 (3.7)(3.8) 的空间耦合一致。第 4 章装配出的稀疏结构，就是 Newton 每步要解的矩阵结构。
+对电池问题，$F$ 包含所有离散方程，$J$ 的非零模式和 (3.11)(3.12) 的空间耦合一致。第 4 章装配出的稀疏结构，就是 Newton 每步要解的矩阵结构。
 
 ## 6.5 发散、振荡与阻尼
 
@@ -200,9 +200,68 @@ ctest --test-dir build -C Release -R "dfn_newton_tests|newton_scalar_runs" --out
 
 ## 代码
 
-- `labs/newton_scalar.cpp`：一维平方根实验。
-- `include/dfn/solvers/newton.hpp`、`src/solvers/newton.cpp`：多变量 Newton。
-- `tests/test_newton.cpp`：耦合系统、缩放、奇异 Jacobian。
+**文件地图**
+
+| 文件 | 作用 |
+| --- | --- |
+| `labs/newton_scalar.cpp` | 一维平方根，打印每步 $x$、$f(x)$ |
+| `include/dfn/solvers/newton.hpp` / `src/solvers/newton.cpp` | 多变量 Newton、缩放、回溯线搜索 |
+| `tests/test_newton.cpp` | 耦合系统、缩放、奇异 Jacobian |
+
+**核心片段：Newton 主循环**
+
+```cpp
+for (int iteration = 0; iteration < options.max_iterations; ++iteration) {
+  const auto r = residual(x);
+  const double r_norm = max_abs(r);
+  if (r_norm < options.tolerance) {
+    break;                         // 收敛，结果随后写回
+  }
+
+  const auto J = jacobian(x);
+  auto scaled_J = J;
+  for (int i = 0; i < n; ++i) {
+    for (int j = 0; j < n; ++j) {
+      scaled_J[i][j] *= scale[j];  // 列缩放
+    }
+  }
+
+  std::vector<double> rhs(n, 0.0);
+  for (int i = 0; i < n; ++i) {
+    rhs[i] = -r[i];
+  }
+  const auto scaled_step = solve_dense(scaled_J, rhs);
+
+  double alpha = 1.0;
+  while (trial_norm(alpha) > (1.0 - 1e-4 * alpha) * r_norm &&
+         alpha > 1e-8) {
+    alpha *= 0.5;                  // 回溯线搜索
+  }
+
+  for (int j = 0; j < n; ++j) {
+    x[j] += alpha * scale[j] * scaled_step[j];
+  }
+}
+```
+
+三个关键点：
+
+- **缩放**：`scale[j]` 把不同量纲的变量拉到同一量级，线性方程在缩放坐标里解，再乘回去。
+- **线搜索**：`trial_norm(alpha)` 是代码里就地定义的“试探点残差范数”；如果整步让残差变大，就不断减半，直到满足足够的下降，`alpha` 是实际步长比例。
+- **收敛判据**：这里看残差范数；代码还会检查步长，并在退出时把迭代次数和残差历史写进 `NewtonResult`。
+
+一维版本更短，方便手算对照：
+
+```cpp
+x -= (x * x - 2.0) / (2.0 * x);   // f(x)=x^2-2, f'(x)=2x
+```
+
+```bat
+build\Release\newton_scalar.exe 1
+ctest --test-dir build -C Release -R dfn_newton_tests --output-on-failure
+```
+
+把初值从 1 改成 10、0.1 或负数，观察收敛速度和失败情形；再把 `max_iterations` 调小，看 `converged=false` 时残差停在哪里。
 
 ## 练习
 

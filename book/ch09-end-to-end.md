@@ -448,7 +448,69 @@ const SolveReport r = ida_integrate(model, y, yp, t_event, t_event + hold,
 
 ## 代码
 
-`src/main.cpp`、`src/sim/simulation.cpp`、`src/sim/config.cpp`、`tests/test_simulation.cpp`、`scripts/compare_pybamm.py`、`labs/dfn_discharge.cpp`
+**文件地图**
+
+| 文件 | 作用 |
+| --- | --- |
+| `src/main.cpp` | 命令行入口，解析参数与工况 |
+| `src/sim/simulation.cpp` | 分段驱动、事件、状态拼接、统计 |
+| `src/sim/config.cpp` | YAML 配置到 `SimulationConfig` |
+| `tests/test_simulation.cpp` | 完整性、守恒、工况回归 |
+| `scripts/compare_pybamm.py` | 与 PyBaMM 的逐点对比 |
+| `labs/dfn_discharge.cpp` | 最小放电示例 |
+
+**核心片段：一个工况段的拼接**
+
+```cpp
+const SolveReport report =
+    ida_integrate(model, y, yp, t0, t1, phase_options);
+*stopped_by_event = report.event_index >= 0;
+*t_event = report.t_event;
+
+// 累计步数、残差/Jacobian 次数，写采样点
+y = report.y;
+yp = report.yp;
+```
+
+`run_phase` 把“一段工况”包装成一次 `ida_integrate`：传入当前状态 `y`、导数 `yp`、起止时间和事件，拿回新状态、事件位置和统计量。**`yp` 必须和 `y` 一起传**，因为 DAE 的初值不只是一组状态，还包括满足约束的导数。
+
+CC-CV 就是两次 `run_phase`：
+
+```cpp
+auto voltage_cutoff = [&model, v_cut, charge = config.charge](
+                          double, const double* state, const double*) {
+  const double voltage = model.terminal_voltage(state);
+  return charge ? v_cut - voltage : voltage - v_cut;
+};
+
+model.set_current_density(i_cc);
+options.events = {voltage_cutoff};
+run_phase(model, y, yp, 0.0, config.t_max, options,
+          config.output_interval, "cc", report, totals,
+          &stopped, &t_event);
+
+if (config.mode == SimulationMode::cccv && stopped) {
+  model.set_applied_voltage(v_cut);
+  IdaOptions cv_options = options;
+  cv_options.events.clear();              // 换掉旧事件
+  cv_options.events.push_back(
+      [&model, i_cut](double, const double* state, const double*) {
+        return std::abs(model.terminal_current(state)) - i_cut;
+      });
+  run_phase(model, y, yp, t, t + config.t_hold, cv_options,
+            config.output_interval, "cv", report, totals,
+            &cv_stopped, &t_cv_event);
+}
+```
+
+第一段用恒流和电压截止事件；事件触发后，把模型切到恒压，换成功率/电流截止事件，再从 `t_event` 继续。旧事件一定要清掉，否则一进入 CV 段就会再次触发电压事件。每一段的输出按 `output_interval` 采样，最后统一写 CSV。
+
+```bat
+build-klu\Release\dfn-sim.exe --mode cccv --crate 1 --t-max 5000 --out results/cccv.csv
+ctest --test-dir build-klu -C Release -R dfn_sim_tests --output-on-failure
+```
+
+先跑恒流 `--mode cc`，再加 `--mode cccv` 看 CV 段电流指数衰减；把 `--v-min` 改高或改低，观察截止时间和容量的变化。
 
 ## 练习
 

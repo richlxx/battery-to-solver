@@ -137,7 +137,7 @@ $$
 $M$ 的对角线上，浓度对应 1，电位对应 0。$M$ 奇异，这就是**微分代数方程（DAE）**。
 
 - 浓度是微分变量，需要初值。
-- 电位是代数变量，初值必须满足 (3.9)(3.10)，不能随便给。
+- 电位是代数变量，初值必须满足 (3.13)(3.14)，不能随便给。
 - 显式欧拉没法推进代数变量，因为 $\dot\phi$ 根本不存在；必须用隐式方法，把代数方程和微分方程一起解。
 
 第 8 章的 IDA 就是为这种结构设计的。
@@ -203,10 +203,51 @@ ctest --test-dir build -C Release -R "dfn_bdf2_tests|bdf2_demo_runs|euler_stiff_
 
 ## 代码
 
-- `labs/euler_stiff.cpp`：显式/隐式欧拉对比。
-- `labs/bdf2_demo.cpp`：BDF2 收敛阶实验。
-- `include/dfn/solvers/bdf2.hpp`、`src/solvers/bdf2.cpp`：BDF2 实现。
-- `tests/test_bdf2.cpp`：阶数与刚性稳定性测试。
+**文件地图**
+
+| 文件 | 作用 |
+| --- | --- |
+| `labs/euler_stiff.cpp` | 显式/隐式欧拉对比 |
+| `labs/bdf2_demo.cpp` | BDF2 收敛阶实验 |
+| `include/dfn/solvers/bdf2.hpp` / `src/solvers/bdf2.cpp` | 固定步长 BDF2 |
+| `tests/test_bdf2.cpp` | 阶数与刚性稳定性测试 |
+
+**核心片段：BDF2 的残差与 Jacobian**
+
+```cpp
+const double factor = use_bdf2 ? (2.0 / 3.0) * dt : dt;
+
+const auto residual = [&](const std::vector<double>& y) {
+  const std::vector<double> f = rhs(t_new, y);
+  std::vector<double> r(n, 0.0);
+  for (int j = 0; j < n; ++j) {
+    if (use_bdf2) {
+      r[j] = y[j]
+           - (4.0 / 3.0) * y_curr[j]
+           + (1.0 / 3.0) * y_prev[j]
+           - (2.0 / 3.0) * dt * f[j];
+    } else {
+      r[j] = y[j] - y_curr[j] - dt * f[j];   // 第一步：BDF1
+    }
+  }
+  return r;
+};
+
+// Newton 的 Jacobian：单位阵减去步长因子乘 df/dy
+J[i][j] = (i == j ? 1.0 : 0.0) - factor * dfdy[i][j];
+```
+
+BDF2 不是“每步套一个公式”，而是**每步解一个非线性方程**：`residual` 是未知量 $y_{n+1}$ 的函数，`newton_solve` 在里面跑；Jacobian 是 $I-\text{factor}\cdot\partial f/\partial y$。第一步没有历史，用隐式欧拉（BDF1）启动；之后才切到 BDF2，初值取线性外推 $2y_n-y_{n-1}$。
+
+固定步长的好处是公式简单，适合教学和收敛阶实验；真实求解器会在第 8 章交给 IDA，由它根据局部误差自动选步长和阶数。
+
+```bat
+build\Release\euler_stiff.exe
+build\Release\bdf2_demo.exe
+ctest --test-dir build -C Release -R "dfn_bdf2_tests|bdf2_demo_runs|euler_stiff_runs" --output-on-failure
+```
+
+先跑 `euler_stiff` 看显式法在 $h\ge0.05$ 时怎么失控，再跑 `bdf2_demo` 看误差比是否接近 4；最后把 `h` 减半，观察阶数是否稳定。
 
 ## 练习
 

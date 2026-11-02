@@ -54,10 +54,10 @@
 
 | 本书接口 | 作用 | 对应方程 |
 | --- | --- | --- |
-| `SpmModel(params, n_r_neg, n_r_pos)` | 单颗粒模型，状态只有两个颗粒 + 两个表面浓度 | (10.1)–(10.3) |
-| `SpmModel::set_current_density(J)` | 反应电流由外加电流直接决定 | (10.1) |
-| `SpmModel::reaction_flux(positive)` | 均匀反应电流 $j$ | (10.1) |
-| `SpmModel::terminal_voltage(y)` | $U_{\mathrm{pos}}-U_{\mathrm{neg}}+\eta_{\mathrm{pos}}-\eta_{\mathrm{neg}}$，过电位用标量 Newton 反解 | (10.2)(10.3) |
+| `SpmModel(params, n_r_neg, n_r_pos)` | 单颗粒模型，状态只有两个颗粒 + 两个表面浓度 | (3.1)–(3.6) |
+| `SpmModel::set_current_density(J)` | 反应电流由外加电流直接决定 | (3.5) |
+| `SpmModel::reaction_flux(positive)` | 均匀反应电流 $j$ | (3.5) |
+| `SpmModel::terminal_voltage(y)` | $U_{\mathrm{pos}}-U_{\mathrm{neg}}+\eta_{\mathrm{pos}}-\eta_{\mathrm{neg}}$，过电位用标量 Newton 反解 | (3.6) |
 | `particle_lithium / average_stoichiometry` | 颗粒锂存量与平均化学计量数 | — |
 
 SPM 与 DFN 共用 `DaeModel`、`ida_integrate` 和 `CscBuilder`，所以对比实验只需要换模型对象；`labs/spm_compare.cpp` 就是同一个积分循环跑两遍。
@@ -67,7 +67,7 @@ SPM 与 DFN 共用 `DaeModel`、`ida_integrate` 和 `CscBuilder`，所以对比�
 | 本书接口 | 作用 | 对应公式 |
 | --- | --- | --- |
 | `dfn::fit::SpmBatch(params, nr, dt)` | 固定步长后向欧拉 SPM，CPU 与 GPU 的共同参考 | (11.2) 的正演 |
-| `SpmBatch::step(current)` | 前进一步，返回端电压 | (10.2)(10.3) |
+| `SpmBatch::step(current)` | 前进一步，返回端电压 | (3.6) |
 | `rows_from_protocol(params, segments, nr, dt)` | 按分段电流生成时间/电压表 | 协议 C |
 | `simulate_rows(params, rows, nr, dt)` | 按 CSV 中的电流序列重放 | 拟合残差 |
 | `dfn::levenberg_marquardt(theta, residual, options)` | 通用 LM，阻尼正规方程 | (11.5) |
