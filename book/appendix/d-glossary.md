@@ -31,7 +31,7 @@
 | 开路电压 | OCV | 无电流时的端电压 |
 | 过电位 | overpotential | 实际电位与平衡电位之差 |
 | 化学计量比 | stoichiometry | 电极中锂占可容纳位的比例 |
-| 比表面积 | specific surface area | 单位体积电极的活性面积 |
+| 比表面积 | specific surface area | 单位体积电极的活性面积，球形颗粒 $a_s=3(1-\varepsilon_e)/R_p$，单位 m⁻¹ |
 | 正问题 | forward problem | 已知参数算电压/浓度 |
 | 反问题 | inverse problem | 已知测量反推参数 |
 | 可辨识性 | identifiability | 数据能否唯一确定参数 |
