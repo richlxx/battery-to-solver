@@ -120,7 +120,18 @@ j_{\mathrm{pos}}=-\frac{I}{a_{s,\mathrm{pos}}FL_{\mathrm{pos}}}.
 \tag{3.5}
 $$
 
-其中 $I$ 是外加电流密度（A·m⁻²），$L$ 是电极厚度，$a_s=3(1-\varepsilon_e)/R_p$ 是比表面积。放电时 $j_{\mathrm{neg}}>0$（锂离开负极颗粒），$j_{\mathrm{pos}}<0$（锂进入正极颗粒）。
+其中 $I$ 是外加电流密度（A·m⁻²），$L$ 是电极厚度，$a_s$ 是比表面积。放电时 $j_{\mathrm{neg}}>0$（锂离开负极颗粒），$j_{\mathrm{pos}}<0$（锂进入正极颗粒）。
+
+**比表面积是什么？** $a_s$ 不是电极的几何截面积，而是**单位体积电极内所有颗粒的活性表面积**，单位是 $\mathrm{m^2/m^3}=\mathrm{m^{-1}}$。对半径 $R_p$ 的球形颗粒，一个颗粒的表面积是 $4\pi R_p^2$，体积是 $\frac{4}{3}\pi R_p^3$，所以单位颗粒体积的表面积是 $3/R_p$。电极里固相只占体积分数 $\varepsilon_s=1-\varepsilon_e$，把颗粒面积摊到整个电极体积上：
+
+$$
+a_s
+=\varepsilon_s\frac{4\pi R_p^2}{\frac{4}{3}\pi R_p^3}
+=\frac{3\varepsilon_s}{R_p}
+=\frac{3\left(1-\varepsilon_e\right)}{R_p}.
+$$
+
+这个式子说明三件事：颗粒半径减半，$a_s$ 翻倍；孔隙率越高（$\varepsilon_s$ 越小），单位电极体积里的活性面积越少；$a_s$ 的量纲是 $\mathrm{m^{-1}}$，所以 $a_sj$ 的单位是 $\mathrm{mol\,m^{-3}\,s^{-1}}$，正好是体积源项。
 
 用 demo 参数算一次 1C（$I=36$ A/m²）：负极 $a_s=3(1-0.25)/(5\,\mu\mathrm{m})=4.5\times10^5$ m⁻¹，$L=85\,\mu\mathrm{m}$，所以
 
@@ -130,6 +141,8 @@ j_{\mathrm{neg}}=\frac{36}{4.5\times10^5\times96485\times8.5\times10^{-5}}
 $$
 
 正极 $a_s=3(1-0.33)/(5\,\mu\mathrm{m})=4.02\times10^5$ m⁻¹，$L=75\,\mu\mathrm{m}$，得到 $j_{\mathrm{pos}}\approx-1.24\times10^{-5}$。两个数都由总电流直接算出，不需要在每个 $x$ 位置解方程——这就是 SPM 省下来的主要工作。
+
+如果颗粒半径从 $5\,\mu\mathrm{m}$ 减到 $2.5\,\mu\mathrm{m}$，$a_s$ 翻倍，同样的总电流下 $j$ 减半：总反应量 $a_sj$ 不变，只是摊到更大的活性面积上，单位面积的反应负担更轻。粒径分布还会改变锂的扩散路径，所以它会同时影响倍率性能和电压滞后。
 
 端电压由两个电极的开路电位和过电位拼成：
 
