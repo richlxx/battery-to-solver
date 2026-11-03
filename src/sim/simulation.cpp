@@ -5,8 +5,11 @@
 #include <cmath>
 #include <fstream>
 #include <iomanip>
+#include <memory>
 #include <stdexcept>
 #include <utility>
+
+#include "dfn/models/cell_model.hpp"
 
 #ifdef DFN_USE_KLU
 #include "dfn/solvers/idaklu.hpp"
@@ -53,7 +56,7 @@ double controlled_current(const SimulationConfig& config) {
   return config.charge ? -magnitude : magnitude;
 }
 
-void append_samples(const DfnModel& model, const SolveReport& report,
+void append_samples(const CellModel& model, const SolveReport& report,
                     const std::string& phase, SimulationReport& out) {
   for (std::size_t k = 0; k < report.output_t.size(); ++k) {
     const double t = report.output_t[k];
@@ -72,7 +75,7 @@ void append_samples(const DfnModel& model, const SolveReport& report,
   }
 }
 
-bool run_phase(DfnModel& model, std::vector<double>& y, std::vector<double>& yp,
+bool run_phase(CellModel& model, std::vector<double>& y, std::vector<double>& yp,
                double t0, double t1, const IdaOptions& options, double dt,
                const std::string& phase, SimulationReport& out,
                PhaseTotals& totals, bool* stopped_by_event, double* t_event) {
@@ -100,12 +103,31 @@ bool run_phase(DfnModel& model, std::vector<double>& y, std::vector<double>& yp,
 }
 
 // Lithium stored in one electrode per unit separator area, mol/m^2.
-double electrode_lithium_per_area(const DfnModel& model, const double* y,
+double electrode_lithium_per_area(const CellModel& model, const double* y,
                                   bool positive) {
   const Params& params = model.params();
   const ElectrodeParams& electrode = positive ? params.pos : params.neg;
   return model.average_stoichiometry(y, positive) * electrode.c_max *
          (1.0 - electrode.porosity) * electrode.thickness;
+}
+
+std::unique_ptr<CellModel> make_model(const SimulationConfig& config) {
+  switch (config.model) {
+    case ModelKind::spm:
+      return std::make_unique<SpmModel>(config.params, config.n_r_neg,
+                                        config.n_r_pos);
+    case ModelKind::spme:
+      return std::make_unique<SpmeModel>(
+          config.params, config.n_x_neg, config.n_x_sep, config.n_x_pos,
+          config.n_r_neg, config.n_r_pos);
+    case ModelKind::dfn:
+      return std::make_unique<DfnModel>(
+          config.params,
+          make_layout(config.n_x_neg, config.n_x_sep, config.n_x_pos,
+                      config.n_r_neg, config.n_r_pos),
+          DfnOptions{});
+  }
+  return nullptr;
 }
 
 #endif  // DFN_USE_KLU
@@ -139,12 +161,22 @@ SimulationReport run_simulation(const SimulationConfig& config) {
   }
 
 #ifdef DFN_USE_KLU
-  DfnModel model(config.params,
-                 make_layout(config.n_x_neg, config.n_x_sep, config.n_x_pos,
-                             config.n_r_neg, config.n_r_pos),
-                 DfnOptions{});
+  std::unique_ptr<CellModel> model_ptr = make_model(config);
+  if (!model_ptr) {
+    report.message = "unknown model";
+    return report;
+  }
+  CellModel& model = *model_ptr;
+  if ((config.mode == SimulationMode::cv ||
+       config.mode == SimulationMode::cccv) &&
+      !model.supports_voltage_control()) {
+    report.message = std::string(model.name()) +
+                     " does not support cv/cccv; use --model dfn";
+    return report;
+  }
   std::vector<double> y = model.initial_state();
   std::vector<double> yp(static_cast<std::size_t>(model.size()), 0.0);
+  report.model = model.name();
   report.unknowns = model.size();
   report.nnz = model.jacobian_pattern().nnz();
   const double lithium0 = model.total_lithium(y.data());

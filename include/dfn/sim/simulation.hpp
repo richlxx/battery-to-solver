@@ -5,14 +5,19 @@
 #include <vector>
 
 #include "dfn/models/dfn.hpp"
+#include "dfn/models/spm.hpp"
+#include "dfn/models/spme.hpp"
 #include "dfn/params.hpp"
 
 namespace dfn {
+
+enum class ModelKind { spm, spme, dfn };
 
 enum class SimulationMode { cc, cv, cccv, pulse };
 
 struct SimulationConfig {
   Params params = make_demo_params();
+  ModelKind model = ModelKind::dfn;
   SimulationMode mode = SimulationMode::cccv;
 
   // The demo cell stores about 36 Ah/m^2, so 36 A/m^2 is roughly 1C.
@@ -53,6 +58,7 @@ struct SimulationSample {
 struct SimulationReport {
   bool ok = false;
   std::string message;
+  std::string model;
   std::vector<SimulationSample> samples;
 
   double t_end = 0.0;

@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "dfn/models/dfn.hpp"
-#include "dfn/reduction/spm.hpp"
+#include "dfn/models/spm.hpp"
 #include "dfn/solvers/dae.hpp"
 
 #ifdef DFN_USE_KLU

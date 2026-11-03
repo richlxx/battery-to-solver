@@ -8,6 +8,7 @@
 
 - 一条模型阶梯：SPM → SPMe → DFN，知道每一步加了什么物理。
 - 一张 DFN 方程总表：15 个编号公式，后续章节直接引用。
+- 一套按 SPM → SPMe → DFN 组织的模型代码，以及 `--model` 选择方式。
 - 一套可加载的电池参数与状态布局，以及"什么时候用哪个模型"的判断。
 
 ## 3.1 电池是怎么工作的（三分钟版）
@@ -238,7 +239,7 @@ SPMe 的未知量约 $2N_r+2+2N_x$：$N_r$ 为每个颗粒的径向层数，$N_x
 
 但 SPMe 仍有两条硬假设：反应均匀、固相电位均匀。高倍率或厚电极下，反应会向集流体附近集中，固相电位也会沿厚度下降；这两件事 SPMe 都看不见。所以它比 SPM 准、比 DFN 便宜，但不是"万能折中"。
 
-如果自己想实现 SPMe：以 DFN 为骨架，保留 (3.7)–(3.10)，把局部 $j$ 换成 (3.5) 的均匀值，删掉固相电位 (3.11)，再接上两个颗粒的径向扩散。这样不用从头写新模型，还能复用第 4 章的装配器。
+代码里对应 `SpmeModel`：保留 (3.7)–(3.10)，把局部 $j$ 换成 (3.5) 的均匀值，不设固相电位 (3.11)，两个电极各用一颗颗粒的径向扩散。$\phi_e$ 以负集流体为参考固定常数自由度；反应均匀时固体和液相方程都是线性的，只有端电压要反解 Butler–Volmer。状态布局见 3.9。
 
 ## 3.5 完整模型：DFN
 
@@ -392,13 +393,13 @@ $$
 
 ## 3.8 什么时候用哪个
 
-把三个模型放在一起比较（误差数据来自第 10 章表 10.1，DFN 为参考）：
+把三个模型放在一起比较（误差数据来自第 10 章表 10.1、10.2，DFN 为参考）：
 
 | 模型 | 默认未知量 | 1C 电压误差 | 典型耗时 | 适用场景 |
 | --- | --- | --- | --- | --- |
-| SPM | 18（8/8） | 约 15 mV | 0.33 ms | 低倍率、薄电极、BMS 粗估 |
-| SPMe | 54（6/6、20） | 通常介于两者之间 | 介于两者之间 | 电解液受限、反应仍较均匀 |
-| DFN | 168 | 参考解 | 2.2 ms | 高倍率、厚电极、低温、验证 |
+| SPM | 18（8/8） | 约 15 mV | 0.27 ms | 低倍率、薄电极、BMS 粗估 |
+| SPMe | 54（6/6、20） | 约 6 mV | 0.39 ms | 电解液受限、反应仍较均匀 |
+| DFN | 168 | 参考解 | 1.95 ms | 高倍率、厚电极、低温、验证 |
 
 选型不是"越复杂越好"，而是看两个问题：
 
@@ -412,9 +413,38 @@ $$
 3. 用 DFN 抽查同一工况，比较两者的差；这一步只跑一次，不必替 SPM 做全部工作。
 4. 若误差在容差内就用 SPM；否则按 SPMe → DFN 升级，并重新抽查。
 
-第 10 章会把这条路线写成可复现的对比实验：同一组参数、同一工况，SPM 与 DFN 并排跑，误差和耗时一起看。
+命令行用 `--model spm|spme|dfn` 直接切换，三模型共用同一套工况和输出格式。第 10 章会把这条路线写成可复现的对比实验：同一组参数、同一工况，SPM、SPMe 与 DFN 并排跑，误差和耗时一起看。
 
-## 3.9 代码：参数与状态布局
+## 3.9 代码：三级模型与状态布局
+
+三个模型各有一个类，都实现 `include/dfn/models/cell_model.hpp` 的 `CellModel` 接口：
+
+| 模型 | 类 | 文件 | 状态 | 默认规模 |
+| --- | --- | --- | --- | --- |
+| SPM | `SpmModel` | `include/dfn/models/spm.hpp` / `src/models/spm.cpp` | 两个颗粒 + 两个表面浓度 | 18（8/8） |
+| SPMe | `SpmeModel` | `include/dfn/models/spme.hpp` / `src/models/spme.cpp` | SPM + $c_e$、$\phi_e$ | 54（6/6、20） |
+| DFN | `DfnModel` | `include/dfn/models/dfn.hpp` / `src/models/dfn.cpp` | 每个 $x$ 节点一颗颗粒 | 168（8/4/8、6/6） |
+
+`CellModel` 继承第 8 章的 `DaeModel`，只补仿真需要的查询；`run_simulation` 只依赖这个接口，换模型不需要改积分循环：
+
+```cpp
+class CellModel : public DaeModel {
+ public:
+  virtual std::vector<double> initial_state() const = 0;
+  virtual std::vector<double> suggested_atol() const = 0;
+  virtual double terminal_voltage(const double* y) const = 0;
+  virtual double terminal_current(const double* y) const = 0;
+  virtual double average_stoichiometry(const double* y, bool positive) const = 0;
+  virtual double total_lithium(const double* y) const = 0;
+  virtual void set_current_density(double value) = 0;
+  virtual void set_applied_voltage(double value);
+  virtual bool supports_voltage_control() const { return false; }
+  virtual const Params& params() const = 0;
+  virtual const char* name() const = 0;
+};
+```
+
+命令行用 `--model spm|spme|dfn` 选择，默认 `dfn`。SPM/SPMe 没有电压控制方程，`cv`/`cccv` 会在入口处报错并提示改用 DFN；恒流和脉冲不受影响。
 
 本书先用 `configs/demo.yaml` 打通结构；其中的数值是示意值，换真实材料（Chen2020）的路径见第 9 章与第 10 章。
 
@@ -442,10 +472,22 @@ auto layout = dfn::make_layout(3, 2, 4, 5, 6);  // 布局 64 个；加表面浓�
 `dfn_state_tests` 会检查索引不重不漏、初值正确，以及非法参数会被拒绝：
 
 ```bash
-ctest --test-dir build -C Release --output-on-failure
+ctest --test-dir build-klu -C Release --output-on-failure
 ```
 
-SPM 的实现是独立的 `SpmModel`（`include/dfn/reduction/spm.hpp`），复用同一套参数和热力学函数。它没有 $x$ 网格，状态只有两个颗粒加两个表面浓度；第 10 章会用它和 DFN 做对比。
+SPMe 的状态短得多：每个电极仍只有一颗颗粒，另加 $c_e$ 和 $\phi_e$：
+
+| 块 | 未知量 | 长度 |
+| --- | --- | --- |
+| $c_s$ 负极 | 球内径向 | $N_r^-$ |
+| $c_s$ 正极 | 球内径向 | $N_r^+$ |
+| $c_{s,\mathrm{surf}}$ | 两个表面浓度 | 2 |
+| $c_e$ | 全电池 $x$ 节点 | $N_x$ |
+| $\phi_e$ | 全电池 $x$ 节点 | $N_x$ |
+
+合计 $2N_r+2+2N_x$，默认 $6/6$、$N_x=20$ 时是 54。`SpmeModel` 没有 $\phi_s$ 块：反应电流由 (3.5) 直接给出，$\phi_e$ 以负集流体为参考（$\phi_e(0)=0$）固定常数自由度；因此固体和液相方程对状态是线性的，只有端电压要反解 Butler–Volmer。
+
+三个模型的代码差别正好对应物理差别：SPM 没有 $x$ 网格；SPMe 加回 $c_e,\phi_e$ 但 $j$ 仍均匀；DFN 让 $j$ 和 $\phi_s$ 随 $x$ 变化，Jacobian 出现跨块耦合。`tests/test_spm.cpp`、`tests/test_spme.cpp` 分别检查初值、守恒和解析 Jacobian；`labs/model_compare.cpp` 用同一个积分循环跑三模型。
 
 ## 陷阱
 
@@ -470,9 +512,14 @@ SPM 的实现是独立的 `SpmModel`（`include/dfn/reduction/spm.hpp`），复�
 | --- | --- |
 | `configs/demo.yaml` | 示意参数集，打通加载与校验流程 |
 | `include/dfn/params.hpp` / `src/params.cpp` | 参数结构与 `validate()` |
-| `include/dfn/state.hpp` / `src/state.cpp` | 状态布局、索引与初值 |
-| `include/dfn/reduction/spm.hpp` | SPM 的最小实现 |
+| `include/dfn/models/cell_model.hpp` | 三模型公共接口 |
+| `include/dfn/models/spm.hpp` / `src/models/spm.cpp` | SPM：两颗颗粒 + 均匀反应 |
+| `include/dfn/models/spme.hpp` / `src/models/spme.cpp` | SPMe：再加 $c_e$、$\phi_e$ |
+| `include/dfn/models/dfn.hpp` / `src/models/dfn.cpp` | DFN：局部反应与固相电位 |
+| `include/dfn/state.hpp` / `src/state.cpp` | DFN 状态布局、索引与初值 |
 | `tests/test_state.cpp` | 索引不重不漏、初值与非法参数测试 |
+| `tests/test_spm.cpp` / `tests/test_spme.cpp` | 两个降阶模型的电压、守恒与 Jacobian |
+| `labs/model_compare.cpp` | 三模型同工况对比 |
 
 **核心片段：状态布局的偏移与索引**
 
@@ -501,11 +548,39 @@ auto y = dfn::make_initial_state(params, layout);
 
 `make_initial_state` 把 `params.neg.c0`、`params.pos.c0`、`params.elyte.c0` 填进对应块，电位和表面浓度留给求解器或后续章节处理。`validate()` 会在加载参数时检查正性、范围与量纲，参数不对就直接抛异常，不会带着错误参数跑完。
 
-```bash
-ctest --test-dir build -C Release -R dfn_state_tests --output-on-failure
+**核心片段：按名字选模型**
+
+```cpp
+std::unique_ptr<CellModel> make_model(const SimulationConfig& config) {
+  switch (config.model) {
+    case ModelKind::spm:
+      return std::make_unique<SpmModel>(config.params, config.n_r_neg,
+                                        config.n_r_pos);
+    case ModelKind::spme:
+      return std::make_unique<SpmeModel>(
+          config.params, config.n_x_neg, config.n_x_sep, config.n_x_pos,
+          config.n_r_neg, config.n_r_pos);
+    case ModelKind::dfn:
+      return std::make_unique<DfnModel>(
+          config.params,
+          make_layout(config.n_x_neg, config.n_x_sep, config.n_x_pos,
+                      config.n_r_neg, config.n_r_pos));
+  }
+  return nullptr;
+}
 ```
 
-先改 `make_layout` 的三个 $x$ 节点数或两个径向层数，观察 `layout.size()` 和索引范围如何变化；再故意把某个参数改成 0 或负数，看 `validate()` 报哪一条。
+三个模型返回同一个 `CellModel` 指针，后面的分段、事件、采样和 CSV 输出完全复用。SPM/SPMe 在 `cv`/`cccv` 下会先检查 `supports_voltage_control()`，不支持就直接返回错误。
+
+```bat
+build-klu\Release\dfn-sim.exe --model spm --mode cc --crate 1 --dt 60
+build-klu\Release\dfn-sim.exe --model spme --mode cc --crate 1 --dt 60
+build-klu\Release\dfn-sim.exe --model dfn --mode cccv --crate 1 --dt 60
+ctest --test-dir build-klu -C Release -R dfn_spme_tests --output-on-failure
+build-klu\Release\model_compare.exe
+```
+
+先改 `make_layout` 的三个 $x$ 节点数或两个径向层数，观察 `layout.size()` 和索引范围如何变化；再故意把某个参数改成 0 或负数，看 `validate()` 报哪一条。布局本身由 `dfn_state_tests` 单独检查。
 
 ## 练习
 
@@ -513,6 +588,7 @@ ctest --test-dir build -C Release -R dfn_state_tests --output-on-failure
 2. 用第 10 章表 10.1 估算 SPM 在 1C 和 2C 下的电压误差，解释误差为什么随电流近似线性增长。
 3. 写出 SPM 在 $N_r=6/6$ 时的状态向量与方程个数，说明为什么没有 $x$ 网格。
 4. 为下面三个场景选择 SPM、SPMe 或 DFN，并说明理由：(a) 0.1C、薄电极的 BMS 粗估；(b) 2C、厚电极、低温；(c) 电解液受限但反应仍较均匀。
+5. 用 `--model spm|spme|dfn` 跑同一工况，记录未知量、耗时和电压差；说明 SPMe 比 SPM 多出的 $2N_x$ 个未知量分别是什么。
 
 ## 答案
 
@@ -528,3 +604,4 @@ ctest --test-dir build -C Release -R dfn_state_tests --output-on-failure
 2. 表 10.1 给出的 RMSE 约为 1C 15 mV、2C 30 mV，近似与电流成正比。SPM 省略的电解液欧姆压降、浓差压降和固相电位降都正比于电流，所以误差随倍率线性增长；0.06C 时不到 1 mV。
 3. 状态是 $c_s^{\mathrm{neg}}$ 的 6 个径向值、$c_s^{\mathrm{pos}}$ 的 6 个径向值、两个表面浓度，共 14 个。每个径向浓度对应一条 ODE；两个表面浓度是代数未知量，由表面通量 (3.2) 与均匀反应 (3.5) 共同确定（等价于一条表面浓度约束）。没有 $x$ 网格，因为 SPM 假设反应均匀、电解液不参与。
 4. (a) SPM：低倍率、薄电极，电解液和固相电位影响小，成本最低。(b) DFN：高倍率、厚电极、低温，电解液与固相电位都成为瓶颈，SPM/SPMe 的均匀假设不成立。(c) SPMe：电解液受限但反应仍较均匀，正好是 SPMe 的适用范围；上线前用 DFN 抽查误差。
+5. SPMe 多出电解液浓度 $c_e$ 和电解液电位 $\phi_e$ 各 $N_x$ 个，共 $2N_x$；$\phi_e(0)=0$ 用来固定常数自由度。实测 1C 下 SPMe 的 RMSE 约 6 mV（SPM 约 15 mV），耗时约为 SPM 的 1.5 倍（第 10 章表 10.2）。

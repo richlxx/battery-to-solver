@@ -39,7 +39,8 @@
 
 | 本书接口 | 作用 | 对应命令行 |
 | --- | --- | --- |
-| `SimulationConfig` | 参数、网格、工况、容差 | `--config`、`--nx`、`--nr`、`--rtol` |
+| `SimulationConfig` | 参数、模型、网格、工况、容差 | `--config`、`--model`、`--nx`、`--nr`、`--rtol` |
+| `ModelKind::spm/spme/dfn` | 模型阶梯 | `--model` |
 | `SimulationMode::cc/cv/cccv/pulse` | 工况类型 | `--mode` |
 | `SimulationReport::samples` | 采样表（时间、电压、电流、化学计量数、分段） | CSV 主体 |
 | `SimulationReport::capacity` | 放电容量，由负极锂存量差算出（与 (9.7) 等价，且不依赖采样间隔） | 摘要 `cap=` |
@@ -50,17 +51,20 @@
 
 与 SUNDIALS 的对应关系：每个工况分段是一次 `ida_integrate`；`SimulationReport` 里的 `steps/jacobian_evals` 是各分段 `IDAGetNum*` 的累加；`event_index` 只用于分段内部判断是否切换，不进入 CSV。
 
-## E.5 降阶模型（第 10 章）
+## E.5 模型阶梯（第 3/10 章）
 
 | 本书接口 | 作用 | 对应方程 |
 | --- | --- | --- |
+| `CellModel` | SPM/SPMe/DFN 公共接口：在 `DaeModel` 上补初值、端电压、化学计量数等查询 | — |
 | `SpmModel(params, n_r_neg, n_r_pos)` | 单颗粒模型，状态只有两个颗粒 + 两个表面浓度 | (3.1)–(3.6) |
-| `SpmModel::set_current_density(J)` | 反应电流由外加电流直接决定 | (3.5) |
-| `SpmModel::reaction_flux(positive)` | 均匀反应电流 $j$ | (3.5) |
-| `SpmModel::terminal_voltage(y)` | $U_{\mathrm{pos}}-U_{\mathrm{neg}}+\eta_{\mathrm{pos}}-\eta_{\mathrm{neg}}$，过电位用标量 Newton 反解 | (3.6) |
-| `particle_lithium / average_stoichiometry` | 颗粒锂存量与平均化学计量数 | — |
+| `SpmeModel(params, nx_neg, nx_sep, nx_pos, nr_neg, nr_pos)` | 加回电解液浓度与电位，反应仍均匀 | (3.5)、(3.7)–(3.10) |
+| `DfnModel(params, layout, options)` | 全阶模型，局部反应与固相电位 | (3.1)–(3.15) |
+| `set_current_density(J)` | 恒流控制；SPM/SPMe 的反应通量由此直接决定 | (3.5) |
+| `set_applied_voltage(V)` | 恒压控制，只有 DFN 支持 | (3.9)、(3.14) |
+| `terminal_voltage(y)` | 端电压；SPM/SPMe 反解 Butler–Volmer，DFN 读固相电位 | (3.6)、(3.10)、(3.14) |
+| `particle_lithium / average_stoichiometry / total_lithium` | 颗粒锂存量、平均化学计量数、守恒检查 | — |
 
-SPM 与 DFN 共用 `DaeModel`、`ida_integrate` 和 `CscBuilder`，所以对比实验只需要换模型对象；`labs/spm_compare.cpp` 就是同一个积分循环跑两遍。
+`--model spm|spme|dfn` 选择具体实现，默认 DFN；`cv`/`cccv` 只有 DFN 支持，SPM/SPMe 会在入口处报错。三个模型共用 `DaeModel`、`ida_integrate` 和 `CscBuilder`，所以对比实验只需要换模型对象；`labs/model_compare.cpp` 是同一个积分循环跑三遍。
 
 ## E.6 参数拟合与 CUDA（第 11 章）
 

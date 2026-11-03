@@ -3,10 +3,13 @@
 #include <cmath>
 #include <iomanip>
 #include <iostream>
+#include <memory>
 #include <vector>
 
+#include "dfn/models/cell_model.hpp"
 #include "dfn/models/dfn.hpp"
-#include "dfn/reduction/spm.hpp"
+#include "dfn/models/spm.hpp"
+#include "dfn/models/spme.hpp"
 #include "dfn/solvers/idaklu.hpp"
 
 namespace {
@@ -16,7 +19,11 @@ struct Curve {
   std::vector<double> v;
   double t_end = 0.0;
   double ms = 0.0;
+  double rmse = 0.0;
+  double worst = 0.0;
   int steps = 0;
+  int n = 0;
+  int nnz = 0;
 };
 
 double interpolate(const Curve& curve, double t) {
@@ -36,8 +43,7 @@ double interpolate(const Curve& curve, double t) {
   return curve.v[k - 1] * (1.0 - w) + curve.v[k] * w;
 }
 
-template <typename Model>
-Curve run(Model& model, double current, double t_max) {
+Curve run(dfn::CellModel& model, double current, double t_max) {
   model.set_current_density(current);
   const std::vector<double> y0 = model.initial_state();
   const std::vector<double> yp0(static_cast<std::size_t>(model.size()), 0.0);
@@ -72,8 +78,38 @@ Curve run(Model& model, double current, double t_max) {
   curve.t_end = report.output_t.back();
   curve.ms = ms;
   curve.steps = report.steps;
+  curve.n = model.size();
+  curve.nnz = model.jacobian_pattern().nnz();
   return curve;
 }
+
+void compare(Curve& curve, const Curve& reference) {
+  if (curve.t.empty() || reference.t.empty()) {
+    return;
+  }
+  const double limit = std::min(curve.t_end, reference.t_end);
+  double sum = 0.0;
+  double worst = 0.0;
+  int count = 0;
+  for (std::size_t k = 0; k < reference.t.size(); ++k) {
+    const double t = reference.t[k];
+    if (t > limit) {
+      break;
+    }
+    const double diff = reference.v[k] - interpolate(curve, t);
+    sum += diff * diff;
+    worst = std::max(worst, std::abs(diff));
+    ++count;
+  }
+  curve.rmse = std::sqrt(sum / static_cast<double>(count));
+  curve.worst = worst;
+}
+
+struct Row {
+  double current = 0.0;
+  const char* name = "";
+  Curve curve;
+};
 
 }  // namespace
 
@@ -83,42 +119,34 @@ int main() {
   const double t_max = 20000.0;
 
   std::cout << std::setprecision(6);
-  std::cout << "SPM vs DFN, discharge to 3.5 V (DFN 8/4/8, nr 6/6; SPM nr 20/20)\n";
-  std::cout << "I(A/m^2)\tC-rate\tDFN t_cut\tSPM t_cut\tRMSE(mV)\tmax(mV)"
-               "\tDFN(ms)\tSPM(ms)\tDFN steps\tSPM steps\n";
+  std::cout << "SPM / SPMe / DFN, discharge to 3.5 V (DFN 8/4/8, nr 6/6; "
+               "SPMe 8/4/8, nr 6/6; SPM nr 20/20)\n";
+  std::cout << "I(A/m^2)\tC-rate\tmodel\tn\tnnz\tt_cut(s)\tRMSE(mV)"
+               "\tmax(mV)\twall(ms)\tsteps\n";
 
   for (double current : {2.0, 8.0, 16.0, 36.0, 72.0}) {
     dfn::DfnModel dfn(
         params, dfn::make_layout(8, 4, 8, 6, 6),
         dfn::DfnOptions{dfn::ControlMode::current, current, 0.0});
+    dfn::SpmeModel spme(params, 8, 4, 8, 6, 6);
     dfn::SpmModel spm(params, 20, 20);
 
-    const Curve dfn_curve = run(dfn, current, t_max);
-    const Curve spm_curve = run(spm, current, t_max);
-    if (dfn_curve.t.empty() || spm_curve.t.empty()) {
+    Row rows[] = {{current, "dfn", run(dfn, current, t_max)},
+                  {current, "spme", run(spme, current, t_max)},
+                  {current, "spm", run(spm, current, t_max)}};
+    if (rows[0].curve.t.empty() || rows[1].curve.t.empty() ||
+        rows[2].curve.t.empty()) {
       return 1;
     }
 
-    const double limit = std::min(dfn_curve.t_end, spm_curve.t_end);
-    double sum = 0.0;
-    double worst = 0.0;
-    int count = 0;
-    for (std::size_t k = 0; k < dfn_curve.t.size(); ++k) {
-      const double t = dfn_curve.t[k];
-      if (t > limit) {
-        break;
-      }
-      const double diff = dfn_curve.v[k] - interpolate(spm_curve, t);
-      sum += diff * diff;
-      worst = std::max(worst, std::abs(diff));
-      ++count;
+    for (Row& row : rows) {
+      compare(row.curve, rows[0].curve);
+      std::cout << row.current << '\t' << row.current / i_1c << '\t'
+                << row.name << '\t' << row.curve.n << '\t' << row.curve.nnz
+                << '\t' << row.curve.t_end << '\t' << 1000.0 * row.curve.rmse
+                << '\t' << 1000.0 * row.curve.worst << '\t' << row.curve.ms
+                << '\t' << row.curve.steps << '\n';
     }
-    const double rmse = std::sqrt(sum / static_cast<double>(count));
-
-    std::cout << current << '\t' << current / i_1c << '\t' << dfn_curve.t_end
-              << '\t' << spm_curve.t_end << '\t' << 1000.0 * rmse << '\t'
-              << 1000.0 * worst << '\t' << dfn_curve.ms << '\t' << spm_curve.ms
-              << '\t' << dfn_curve.steps << '\t' << spm_curve.steps << '\n';
   }
   return 0;
 }

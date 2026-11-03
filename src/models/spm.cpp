@@ -1,10 +1,11 @@
-#include "dfn/reduction/spm.hpp"
+#include "dfn/models/spm.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
 #include <utility>
 
+#include "dfn/models/reaction.hpp"
 #include "dfn/thermo.hpp"
 
 namespace dfn {
@@ -73,36 +74,9 @@ double SpmModel::open_circuit(const ElectrodeParams& electrode, bool positive,
 
 double SpmModel::surface_overpotential(const ElectrodeParams& electrode,
                                        bool positive, double cs_surf) const {
-  const double j = reaction_flux(positive);
-  if (j == 0.0) {
-    return 0.0;
-  }
-  const double cs = clamp_stoich(cs_surf, electrode.c_max);
-  const double i0 = kFaraday * electrode.k *
-                    std::pow(params_.elyte.c0, electrode.alpha_a) *
-                    std::pow(electrode.c_max - cs, electrode.alpha_a) *
-                    std::pow(cs, electrode.alpha_c);
-  if (i0 <= 0.0) {
-    return 0.0;
-  }
-  const double a =
-      electrode.alpha_a * kFaraday / (kGasConstant * params_.temperature);
-  const double c =
-      electrode.alpha_c * kFaraday / (kGasConstant * params_.temperature);
-
-  double eta = 0.0;
-  for (int iteration = 0; iteration < 60; ++iteration) {
-    const double ea = std::exp(std::clamp(a * eta, -60.0, 60.0));
-    const double ec = std::exp(std::clamp(-c * eta, -60.0, 60.0));
-    const double residual = i0 / kFaraday * (ea - ec) - j;
-    const double derivative = i0 / kFaraday * (a * ea + c * ec);
-    const double step = residual / derivative;
-    eta -= step;
-    if (std::abs(step) < 1e-12) {
-      break;
-    }
-  }
-  return eta;
+  return overpotential_from_flux(params_, electrode, positive,
+                                 params_.elyte.c0, cs_surf,
+                                 reaction_flux(positive));
 }
 
 void SpmModel::residual(double /*t*/, const double* y, const double* yp,

@@ -23,9 +23,11 @@ add_library(dfn_core STATIC
   src/solvers/dae.cpp
   src/solvers/bdf2_dae.cpp
   src/models/chain_dae.cpp
-  src/thermo.cpp
+  src/models/reaction.cpp
+  src/models/spm.cpp
+  src/models/spme.cpp
   src/models/dfn.cpp
-  src/reduction/spm.cpp
+  src/thermo.cpp
   src/sim/config.cpp
   src/sim/simulation.cpp)
 target_include_directories(dfn_core PUBLIC
@@ -152,9 +154,9 @@ if(DFN_USE_KLU)
     target_link_libraries(dfn_discharge PRIVATE dfn_ida)
     dfn_copy_runtime_dlls(dfn_discharge)
 
-    add_executable(spm_compare labs/spm_compare.cpp)
-    target_link_libraries(spm_compare PRIVATE dfn_ida)
-    dfn_copy_runtime_dlls(spm_compare)
+    add_executable(model_compare labs/model_compare.cpp)
+    target_link_libraries(model_compare PRIVATE dfn_ida)
+    dfn_copy_runtime_dlls(model_compare)
   endif()
 endif()
 
@@ -210,6 +212,14 @@ if(BUILD_TESTING AND DFN_BUILD_TESTS)
     dfn_copy_runtime_dlls(dfn_spm_tests)
   endif()
 
+  add_executable(dfn_spme_tests tests/test_spme.cpp)
+  target_link_libraries(dfn_spme_tests PRIVATE dfn_core)
+  add_test(NAME dfn_spme_tests COMMAND dfn_spme_tests)
+  if(DFN_USE_KLU)
+    target_link_libraries(dfn_spme_tests PRIVATE dfn_ida)
+    dfn_copy_runtime_dlls(dfn_spme_tests)
+  endif()
+
   add_executable(dfn_fit_tests tests/test_fit.cpp)
   target_link_libraries(dfn_fit_tests PRIVATE dfn_core)
   add_test(NAME dfn_fit_tests COMMAND dfn_fit_tests)
@@ -239,7 +249,7 @@ if(BUILD_TESTING AND DFN_BUILD_TESTS)
 
     if(DFN_BUILD_LABS)
       add_test(NAME ida_compare_runs COMMAND ida_compare)
-      add_test(NAME spm_compare_runs COMMAND spm_compare)
+      add_test(NAME model_compare_runs COMMAND model_compare)
     endif()
   endif()
   add_test(NAME dfn_sim_help COMMAND dfn-sim --help)
