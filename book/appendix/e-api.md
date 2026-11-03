@@ -60,7 +60,7 @@
 | `SpmeModel(params, nx_neg, nx_sep, nx_pos, nr_neg, nr_pos)` | 加回电解液浓度与电位，反应仍均匀 | (3.5)、(3.7)–(3.10) |
 | `DfnModel(params, layout, options)` | 全阶模型，局部反应与固相电位 | (3.1)–(3.15) |
 | `set_current_density(J)` | 恒流控制；SPM/SPMe 的反应通量由此直接决定 | (3.5) |
-| `set_applied_voltage(V)` | 恒压控制，只有 DFN 支持 | (3.9)、(3.14) |
+| `set_applied_voltage(V)` | 恒压控制，只有 DFN 支持 | (9.5) |
 | `terminal_voltage(y)` | 端电压；SPM/SPMe 反解 Butler–Volmer，DFN 读固相电位 | (3.6)、(3.10)、(3.14) |
 | `particle_lithium / average_stoichiometry / total_lithium` | 颗粒锂存量、平均化学计量数、守恒检查 | — |
 

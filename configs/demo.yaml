@@ -1,5 +1,5 @@
-# Demo parameters for M2. Illustrative values; replaced by the Chen2020 table
-# when the parameter loader lands.
+# Demo parameters. Illustrative values, not a real material; see 9.7 of the
+# book for replacing them with a measured parameter set.
 
 cell:
   area: 0.0165

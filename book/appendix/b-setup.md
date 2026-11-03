@@ -15,10 +15,10 @@
 
 ## B.2 第一个程序：不装任何依赖
 
-第 0–2 章的 lab 只依赖标准库，可以直接编译：
+第 0–2 章的 lab 不需要第三方库；`ocv_curve` 还用到仓库里的 `src/thermo.cpp`：
 
 ```bash
-g++ -std=c++20 labs/ocv_curve.cpp -o ocv
+g++ -std=c++20 -Iinclude labs/ocv_curve.cpp src/thermo.cpp -o ocv
 ./ocv > ocv.csv
 python scripts/plot_ocv.py ocv.csv
 ```
@@ -26,7 +26,7 @@ python scripts/plot_ocv.py ocv.csv
 Windows 上如果只有 MSVC，在“Developer Command Prompt”里用：
 
 ```bat
-cl /std:c++20 /EHsc labs\ocv_curve.cpp
+cl /std:c++20 /EHsc /Iinclude /Fe:ocv_curve.exe labs\ocv_curve.cpp src\thermo.cpp
 ocv_curve.exe > ocv.csv
 ```
 

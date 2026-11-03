@@ -69,6 +69,7 @@
 | 起步 | 0–2 | 数学直觉、误差与收敛、第一个程序 |
 | 造求解器 | 3–8 | DFN 模型、离散、线性代数、Newton、时间积分、IDAKLU |
 | 集成与延伸 | 9–10 | 完整 CLI、验证报告、降阶模型 |
+| 综合实验（选学） | 11 | 从时间–电压曲线反推参数、CUDA 批量评估 |
 
 每章开头都有一句"本章你会得到"，难度用 ★（必读）、★★（需要耐心）、★★★（选学）标记。第一遍读不懂的公式可以跳过，不影响主线。
 
@@ -91,13 +92,13 @@ Windows（在仓库根目录）：
 scripts\build_msvc.bat
 ```
 
-Linux/macOS，或不想用 CMake 时，可以直接编译这个单文件实验：
+Linux/macOS，或不想用 CMake 时，可以直接编译这个实验（它用到仓库里的 OCP 函数）：
 
 ```bash
-g++ -std=c++20 labs/ocv_curve.cpp -o ocv_curve
+g++ -std=c++20 -Iinclude labs/ocv_curve.cpp src/thermo.cpp -o ocv_curve
 ```
 
-这个实验只依赖标准库，不需要 Eigen、SUNDIALS 或 vcpkg。
+它只依赖标准库，不需要 Eigen、SUNDIALS 或 vcpkg。
 
 ### 第 2 步：运行
 
