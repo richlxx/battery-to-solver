@@ -108,6 +108,44 @@ int main() {
     return fail("CSV output does not match the sample list");
   }
 
+  dfn::SimulationConfig reduced;
+  reduced.mode = dfn::SimulationMode::cc;
+  reduced.n_x_neg = 4;
+  reduced.n_x_sep = 2;
+  reduced.n_x_pos = 4;
+  reduced.n_r_neg = 4;
+  reduced.n_r_pos = 4;
+  reduced.t_max = 600.0;
+  reduced.output_interval = 300.0;
+
+  reduced.model = dfn::ModelKind::spme;
+  const dfn::SimulationReport spme_report = dfn::run_simulation(reduced);
+  if (!spme_report.ok || spme_report.model != "spme") {
+    std::cerr << spme_report.message << "\n";
+    return fail("SPMe simulation failed");
+  }
+  if (spme_report.unknowns != 4 + 4 + 2 + 10 + 10) {
+    return fail("SPMe unknown count is wrong");
+  }
+
+  reduced.model = dfn::ModelKind::spm;
+  const dfn::SimulationReport spm_report = dfn::run_simulation(reduced);
+  if (!spm_report.ok || spm_report.model != "spm") {
+    std::cerr << spm_report.message << "\n";
+    return fail("SPM simulation failed");
+  }
+  if (spm_report.unknowns != 4 + 4 + 2) {
+    return fail("SPM unknown count is wrong");
+  }
+
+  reduced.model = dfn::ModelKind::spme;
+  reduced.mode = dfn::SimulationMode::cccv;
+  const dfn::SimulationReport unsupported = dfn::run_simulation(reduced);
+  if (unsupported.ok ||
+      unsupported.message.find("does not support") == std::string::npos) {
+    return fail("SPMe should reject voltage control");
+  }
+
   dfn::SimulationConfig pulse;
   pulse.mode = dfn::SimulationMode::pulse;
   pulse.n_x_neg = 4;

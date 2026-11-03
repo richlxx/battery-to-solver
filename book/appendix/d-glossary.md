@@ -28,6 +28,9 @@
 | 微分代数方程 | DAE | 同时含微分方程和代数约束的系统 |
 | 事件 | event | 满足某个条件时暂停或切换工况 |
 | 降阶模型 | reduced-order model | 用更少未知量近似原模型 |
+| SPM | single particle model | 每个电极只保留一颗颗粒，反应均匀、无电解液 |
+| SPMe | single particle model with electrolyte | 在 SPM 上加回电解液浓度与电位，反应仍均匀 |
+| DFN | Doyle–Fuller–Newman model | 每个 $x$ 节点一颗颗粒，反应由局部状态决定 |
 | 开路电压 | OCV | 无电流时的端电压 |
 | 过电位 | overpotential | 实际电位与平衡电位之差 |
 | 化学计量比 | stoichiometry | 电极中锂占可容纳位的比例 |

@@ -5,7 +5,7 @@
 
 #include "dfn/fit/levenberg_marquardt.hpp"
 #include "dfn/fit/spm_batch.hpp"
-#include "dfn/reduction/spm.hpp"
+#include "dfn/models/spm.hpp"
 
 #ifdef DFN_USE_KLU
 #include "dfn/solvers/idaklu.hpp"

@@ -17,11 +17,14 @@
 | 阶段 | 输入 | 输出 | 代码 |
 | --- | --- | --- | --- |
 | 参数 | YAML 文件或默认值 | `Params` | `src/sim/config.cpp` |
+| 模型选择 | `--model` / `ModelKind` | `CellModel` 子类 | `src/sim/simulation.cpp` |
 | 网格 | `StateLayout`、厚度 | 分段 $x$ 网格 + 每个电极的球网格 | `src/models/dfn.cpp` |
 | 状态 | 参数、布局 | 初值 $y_0$、容差 | `DfnModel::initial_state()` |
 | 装配 | $t,y,\dot y$ | 残差 $F$、稀疏 Jacobian | `DfnModel::residual/jacobian` |
 | 求解 | $y_0$、容差、事件 | 采样点、统计量 | `ida_integrate` |
 | 输出 | 采样表 | CSV、摘要 | `src/sim/simulation.cpp` |
+
+三个模型共用这条流水线：`run_simulation` 只持有 `CellModel` 指针，SPM/SPMe 只是换掉网格、状态和残差，分段、事件与输出不变。下面的状态向量和 168 个未知量是 DFN 专属；SPM 没有 $x$ 网格，SPMe 的规模是 $2N_r+2+2N_x$。
 
 状态向量按块排列：
 
@@ -87,6 +90,8 @@ std::vector<int> DfnModel::variable_types() const {
 | 脉冲 | 多段 | 电流在 $I$ 与 0 之间切换 | 电压 |
 
 上表默认指放电。加 `--charge` 后电流取负、截止电压换成 `--v-max`、事件符号取反，四种工况同样可用；9.7 节给出例子。
+
+表 9.1 的电压控制只有 DFN 支持。SPM 和 SPMe 的 $j$ 由电流直接给出，没有"给定电压反解电流"的方程，因此 `--model spm`/`--model spme` 配 `cv` 或 `cccv` 会在入口处报错并提示改用 `--model dfn`；恒流与脉冲三种模型都支持。
 
 ![图 9.1　四种工况的电流（虚线，左轴）与电压（实线，右轴）示意，横轴为归一化时间](assets/fig09-protocol.svg)
 
@@ -452,14 +457,19 @@ const SolveReport r = ida_integrate(model, y, yp, t_event, t_event + hold,
 
 | 文件 | 作用 |
 | --- | --- |
-| `src/main.cpp` | 命令行入口，解析参数与工况 |
+| `src/main.cpp` | 命令行入口，解析参数、模型与工况 |
+| `include/dfn/models/cell_model.hpp` | SPM/SPMe/DFN 公共接口 |
+| `include/dfn/models/{spm,spme,dfn}.hpp` | 三个模型的具体实现 |
 | `src/sim/simulation.cpp` | 分段驱动、事件、状态拼接、统计 |
 | `src/sim/config.cpp` | YAML 配置到 `SimulationConfig` |
 | `tests/test_simulation.cpp` | 完整性、守恒、工况回归 |
 | `scripts/compare_pybamm.py` | 与 PyBaMM 的逐点对比 |
 | `labs/dfn_discharge.cpp` | 最小放电示例 |
+| `labs/model_compare.cpp` | 三模型同工况对比 |
 
 **核心片段：一个工况段的拼接**
+
+`run_phase` 的参数类型是 `CellModel&`，所以同一段代码对三个模型都成立；DFN 只是默认选择。
 
 ```cpp
 const SolveReport report =
@@ -506,7 +516,7 @@ if (config.mode == SimulationMode::cccv && stopped) {
 第一段用恒流和电压截止事件；事件触发后，把模型切到恒压，换成功率/电流截止事件，再从 `t_event` 继续。旧事件一定要清掉，否则一进入 CV 段就会再次触发电压事件。每一段的输出按 `output_interval` 采样，最后统一写 CSV。
 
 ```bat
-build-klu\Release\dfn-sim.exe --mode cccv --crate 1 --t-max 5000 --out results/cccv.csv
+build-klu\Release\dfn-sim.exe --model dfn --mode cccv --crate 1 --t-max 5000 --out results/cccv.csv
 ctest --test-dir build-klu -C Release -R dfn_sim_tests --output-on-failure
 ```
 

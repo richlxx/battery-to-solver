@@ -18,6 +18,7 @@ void print_help() {
       << "  -h, --help              Show this message\n"
       << "      --version           Show the version\n"
       << "      --config PATH       Load parameters (see configs/demo.yaml)\n"
+      << "      --model NAME        spm, spme or dfn (default)\n"
       << "      --mode NAME         cc, cv, cccv (default) or pulse\n"
       << "                          cv holds --hold-voltage and needs an\n"
       << "                          initial state at that voltage\n"
@@ -38,8 +39,9 @@ void print_help() {
       << "      --out PATH          Write CSV to PATH instead of stdout\n"
       << "      --quiet             Do not print the summary\n\n"
       << "Example:\n"
-      << "  dfn-sim --mode cccv --crate 1 --dt 60 --out results/cccv.csv\n"
-      << "  dfn-sim --mode cc --crate 1 --charge --v-max 4.0 --dt 10\n";
+      << "  dfn-sim --model dfn --mode cccv --crate 1 --dt 60 --out results/cccv.csv\n"
+      << "  dfn-sim --model spme --mode cc --crate 1 --dt 60\n"
+      << "  dfn-sim --model spm --mode cc --crate 1 --charge --v-max 4.0 --dt 10\n";
 }
 
 bool parse_double(const char* text, double* value) {
@@ -74,6 +76,31 @@ bool parse_mode(std::string_view text, dfn::SimulationMode* mode) {
     return false;
   }
   return true;
+}
+
+bool parse_model(std::string_view text, dfn::ModelKind* model) {
+  if (text == "spm") {
+    *model = dfn::ModelKind::spm;
+  } else if (text == "spme") {
+    *model = dfn::ModelKind::spme;
+  } else if (text == "dfn") {
+    *model = dfn::ModelKind::dfn;
+  } else {
+    return false;
+  }
+  return true;
+}
+
+const char* model_name(dfn::ModelKind model) {
+  switch (model) {
+    case dfn::ModelKind::spm:
+      return "spm";
+    case dfn::ModelKind::spme:
+      return "spme";
+    case dfn::ModelKind::dfn:
+      return "dfn";
+  }
+  return "?";
 }
 
 const char* mode_name(dfn::SimulationMode mode) {
@@ -120,6 +147,13 @@ int main(int argc, char** argv) {
         config.params = dfn::load_params_yaml(value("--config"));
       } catch (const std::exception& error) {
         std::cerr << "error: " << error.what() << "\n";
+        return 2;
+      }
+      continue;
+    }
+    if (arg == "--model") {
+      if (!parse_model(value("--model"), &config.model)) {
+        std::cerr << "error: --model must be spm, spme or dfn\n";
         return 2;
       }
       continue;
@@ -260,7 +294,8 @@ int main(int argc, char** argv) {
 
   if (!quiet && !report.samples.empty()) {
     const dfn::SimulationSample& last = report.samples.back();
-    std::cerr << std::fixed << std::setprecision(4) << "mode="
+    std::cerr << std::fixed << std::setprecision(4)
+              << "model=" << model_name(config.model) << " mode="
               << mode_name(config.mode)
               << (config.charge ? "/charge" : "/discharge") << " grid="
               << config.n_x_neg << "/"

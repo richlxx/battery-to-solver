@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "dfn/grid.hpp"
+#include "dfn/models/cell_model.hpp"
 #include "dfn/operators.hpp"
 #include "dfn/params.hpp"
 #include "dfn/solvers/dae.hpp"
@@ -13,7 +14,7 @@ namespace dfn {
 // reaction current and no electrolyte. The terminal voltage is
 // U_pos - U_neg + eta_pos - eta_neg, evaluated from the surface
 // concentrations; there is no spatial x grid.
-class SpmModel final : public DaeModel {
+class SpmModel final : public CellModel {
  public:
   SpmModel(Params params, int n_r_neg, int n_r_pos);
 
@@ -25,19 +26,26 @@ class SpmModel final : public DaeModel {
   void jacobian(double t, const double* y, const double* yp, double cj,
                 CscBuilder& out) const override;
 
-  const Params& params() const { return params_; }
+  const Params& params() const override { return params_; }
+  const char* name() const override { return "spm"; }
 
-  void set_current_density(double value) { current_ = value; }
+  void set_current_density(double value) override { current_ = value; }
   double current_density() const { return current_; }
+  double terminal_current(const double* /*y*/) const override {
+    return current_;
+  }
 
-  std::vector<double> initial_state() const;
-  std::vector<double> suggested_atol() const;
+  std::vector<double> initial_state() const override;
+  std::vector<double> suggested_atol() const override;
 
   // Terminal voltage for the current set by set_current_density.
-  double terminal_voltage(const double* y) const;
+  double terminal_voltage(const double* y) const override;
   // Solid-phase lithium of one particle, mol per m^2 of electrode area.
   double particle_lithium(const double* y, bool positive) const;
-  double average_stoichiometry(const double* y, bool positive) const;
+  double average_stoichiometry(const double* y, bool positive) const override;
+  double total_lithium(const double* y) const override {
+    return particle_lithium(y, false) + particle_lithium(y, true);
+  }
 
   int cs_neg(int ir) const { return ir; }
   int cs_pos(int ir) const { return n_r_neg_ + ir; }

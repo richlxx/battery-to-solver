@@ -730,15 +730,18 @@ def perf_figure(workdir):
 
 
 def spm_figure(workdir):
-    stdout, _ = run([exe("spm_compare")])
+    stdout, _ = run([exe("model_compare")])
     currents, rmse, dfn_ms, spm_ms = [], [], [], []
     for line in stdout.splitlines():
         parts = line.split("\t")
         if len(parts) == 10 and parts[0].replace(".", "", 1).isdigit():
-            currents.append(float(parts[0]))
-            rmse.append(float(parts[4]))
-            dfn_ms.append(float(parts[6]))
-            spm_ms.append(float(parts[7]))
+            model = parts[2]
+            if model == "dfn":
+                currents.append(float(parts[0]))
+                dfn_ms.append(float(parts[8]))
+            elif model == "spm":
+                rmse.append(float(parts[6]))
+                spm_ms.append(float(parts[8]))
 
     fig, (ax, ax2) = plt.subplots(1, 2, figsize=(9.0, 3.8))
     ax.plot(currents, rmse, "o-", color=BLUE, lw=1.6, ms=5)

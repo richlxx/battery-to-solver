@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <utility>
 
+#include "dfn/models/reaction.hpp"
 #include "dfn/thermo.hpp"
 
 namespace dfn {
@@ -128,40 +129,6 @@ int DfnModel::global_index(int local_ix, bool positive) const {
   return positive ? layout_.n_x_neg + layout_.n_x_sep + local_ix : local_ix;
 }
 
-DfnModel::ReactionValue DfnModel::reaction_at(const ElectrodeParams& electrode,
-                                              bool positive, double ce,
-                                              double cs_surf, double phis,
-                                              double phie) const {
-  const double cmax = electrode.c_max;
-  const double cs = std::clamp(cs_surf, 1e-6 * cmax, cmax * (1.0 - 1e-6));
-  const double ce_clamped = std::max(ce, 1e-6 * params_.elyte.c0);
-  const double stoich = cs / cmax;
-  const OcpValue ocp =
-      positive ? positive_ocp(stoich) : negative_ocp(stoich);
-
-  const double i0 = kFaraday * electrode.k *
-                    std::pow(ce_clamped, electrode.alpha_a) *
-                    std::pow(cmax - cs, electrode.alpha_a) *
-                    std::pow(cs, electrode.alpha_c);
-  const double eta = phis - phie - ocp.value;
-  const double a =
-      electrode.alpha_a * kFaraday / (kGasConstant * params_.temperature);
-  const double c =
-      electrode.alpha_c * kFaraday / (kGasConstant * params_.temperature);
-  const double ea = std::exp(std::clamp(a * eta, -60.0, 60.0));
-  const double ec = std::exp(std::clamp(-c * eta, -60.0, 60.0));
-
-  ReactionValue result;
-  result.j = i0 / kFaraday * (ea - ec);
-  result.dj_deta = i0 / kFaraday * (a * ea + c * ec);
-  result.dj_dce = result.j * electrode.alpha_a / ce_clamped;
-  result.dj_dcs =
-      result.j * (-electrode.alpha_a / (cmax - cs) +
-                  electrode.alpha_c / cs) -
-      result.dj_deta * ocp.slope / cmax;
-  return result;
-}
-
 void DfnModel::residual(double /*t*/, const double* y, const double* yp,
                         double* out) const {
   const int n = size();
@@ -175,14 +142,14 @@ void DfnModel::residual(double /*t*/, const double* y, const double* yp,
   for (int ix = 0; ix < layout_.n_x_neg; ++ix) {
     const int gx = global_index(ix, false);
     neg_reaction_[static_cast<std::size_t>(ix)] = reaction_at(
-        params_.neg, false, y[layout_.ce(gx)],
+        params_, params_.neg, false, y[layout_.ce(gx)],
         y[cs_surf_neg(ix)], y[layout_.phis_neg(ix)],
         y[layout_.phie(gx)]);
   }
   for (int ix = 0; ix < layout_.n_x_pos; ++ix) {
     const int gx = global_index(ix, true);
     pos_reaction_[static_cast<std::size_t>(ix)] = reaction_at(
-        params_.pos, true, y[layout_.ce(gx)],
+        params_, params_.pos, true, y[layout_.ce(gx)],
         y[cs_surf_pos(ix)], y[layout_.phis_pos(ix)],
         y[layout_.phie(gx)]);
   }
@@ -355,14 +322,14 @@ void DfnModel::jacobian(double /*t*/, const double* y, const double* /*yp*/,
   for (int ix = 0; ix < layout_.n_x_neg; ++ix) {
     const int gx = global_index(ix, false);
     neg_reaction_[static_cast<std::size_t>(ix)] = reaction_at(
-        params_.neg, false, y[layout_.ce(gx)],
+        params_, params_.neg, false, y[layout_.ce(gx)],
         y[cs_surf_neg(ix)], y[layout_.phis_neg(ix)],
         y[layout_.phie(gx)]);
   }
   for (int ix = 0; ix < layout_.n_x_pos; ++ix) {
     const int gx = global_index(ix, true);
     pos_reaction_[static_cast<std::size_t>(ix)] = reaction_at(
-        params_.pos, true, y[layout_.ce(gx)],
+        params_, params_.pos, true, y[layout_.ce(gx)],
         y[cs_surf_pos(ix)], y[layout_.phis_pos(ix)],
         y[layout_.phie(gx)]);
   }
@@ -768,7 +735,8 @@ double DfnModel::electrode_current(const double* y, bool positive) const {
   for (int ix = 0; ix < nx; ++ix) {
     const int gx = gx0 + ix;
     const ReactionValue reaction = reaction_at(
-        positive ? params_.pos : params_.neg, positive, y[layout_.ce(gx)],
+        params_, positive ? params_.pos : params_.neg, positive,
+        y[layout_.ce(gx)],
         y[positive ? cs_surf_pos(ix) : cs_surf_neg(ix)],
         y[positive ? layout_.phis_pos(ix) : layout_.phis_neg(ix)],
         y[layout_.phie(gx)]);

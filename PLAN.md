@@ -62,7 +62,7 @@
 | BDF/自适应步长 | 固相扩散与双电层造成的刚性 | 7 | `include/dfn/solvers/bdf2.hpp` |
 | IDA + KLU | 生产级 DAE 求解 | 8 | `include/dfn/solvers/idaklu.hpp` |
 | 事件检测 | 电压截止、CC→CV | 7, 9 | `include/dfn/sim/events.hpp` |
-| 降阶模型 | SPM/SPMe | 10 | `include/dfn/reduction/` |
+| 降阶模型 | SPM/SPMe | 3, 10 | `include/dfn/models/` |
 
 ## 6. 代码架构
 
@@ -82,7 +82,7 @@ numerical-p2d/
 │  ├─ linalg/               # eigen.hpp, klu.hpp
 │  ├─ solvers/              # newton, bdf2, idaklu, dae_solver
 │  ├─ sim/                  # 工况、事件、输出、CLI
-│  └─ reduction/            # SPM/SPMe
+│  └─ models/              # cell_model + SPM/SPMe/DFN
 ├─ src/                     # 实现与 main
 ├─ bindings/python.cpp      # pybind11
 ├─ tests/                   # 守恒、收敛阶、回归、一致性

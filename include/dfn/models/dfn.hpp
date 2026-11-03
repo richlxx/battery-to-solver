@@ -3,6 +3,8 @@
 #include <vector>
 
 #include "dfn/grid.hpp"
+#include "dfn/models/cell_model.hpp"
+#include "dfn/models/reaction.hpp"
 #include "dfn/operators.hpp"
 #include "dfn/params.hpp"
 #include "dfn/solvers/dae.hpp"
@@ -20,7 +22,7 @@ struct DfnOptions {
 
 // Isothermal DFN with the equations of chapter 3. The concentrated-solution
 // correction kappa_D is set to zero; see chapter 9 for the rationale.
-class DfnModel final : public DaeModel {
+class DfnModel final : public CellModel {
  public:
   DfnModel(Params params, StateLayout layout, DfnOptions options = {});
 
@@ -32,7 +34,9 @@ class DfnModel final : public DaeModel {
   void jacobian(double t, const double* y, const double* yp, double cj,
                 CscBuilder& out) const override;
 
-  const Params& params() const { return params_; }
+  const Params& params() const override { return params_; }
+  const char* name() const override { return "dfn"; }
+  bool supports_voltage_control() const override { return true; }
   const StateLayout& layout() const { return layout_; }
   const Grid1D& x_grid() const { return x_grid_; }
 
@@ -45,38 +49,28 @@ class DfnModel final : public DaeModel {
     return options_.applied_current_density;
   }
   double applied_voltage() const { return options_.applied_voltage; }
-  void set_current_density(double value);
-  void set_applied_voltage(double value);
+  void set_current_density(double value) override;
+  void set_applied_voltage(double value) override;
   void set_control(ControlMode mode, double value);
 
-  std::vector<double> initial_state() const;
-  std::vector<double> suggested_atol() const;
+  std::vector<double> initial_state() const override;
+  std::vector<double> suggested_atol() const override;
 
   // Terminal voltage at the positive current-collector face.
-  double terminal_voltage(const double* y) const;
+  double terminal_voltage(const double* y) const override;
   // Total current density through the cell, A/m^2 (positive = discharge).
-  double terminal_current(const double* y) const;
+  double terminal_current(const double* y) const override;
 
-  double total_lithium(const double* y) const;
+  double total_lithium(const double* y) const override;
   double solid_lithium(const double* y) const;
   double electrolyte_lithium(const double* y) const;
   // Volume-averaged stoichiometry c_s / c_max of one electrode.
-  double average_stoichiometry(const double* y, bool positive) const;
+  double average_stoichiometry(const double* y, bool positive) const override;
   // Integrated reaction current over one electrode, in amperes; should be
   // +I for the negative electrode and -I for the positive one.
   double electrode_current(const double* y, bool positive) const;
 
  private:
-  struct ReactionValue {
-    double j = 0.0;       // mol/(m^2 s)
-    double dj_deta = 0.0;
-    double dj_dce = 0.0;
-    double dj_dcs = 0.0;
-  };
-
-  ReactionValue reaction_at(const ElectrodeParams& electrode, bool positive,
-                            double ce, double cs_surf, double phis,
-                            double phie) const;
   int global_index(int local_ix, bool positive) const;
   void build_pattern();
 
