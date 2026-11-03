@@ -93,6 +93,8 @@ std::vector<int> DfnModel::variable_types() const {
 
 表 9.1 的电压控制只有 DFN 支持。SPM 和 SPMe 的 $j$ 由电流直接给出，没有"给定电压反解电流"的方程，因此 `--model spm`/`--model spme` 配 `cv` 或 `cccv` 会在入口处报错并提示改用 `--model dfn`；恒流与脉冲三种模型都支持。
 
+CV 段的截止电流本书取 CC 电流的 5%（代码里是 `i_cut = 0.05 * |I_cc|`），没有单独的命令行参数。
+
 ![图 9.1　四种工况的电流（虚线，左轴）与电压（实线，右轴）示意，横轴为归一化时间](assets/fig09-protocol.svg)
 
 恒流段的事件函数直接返回电压差：
@@ -321,6 +323,7 @@ Options:
   -h, --help              Show this message
       --version           Show the version
       --config PATH       Load parameters (see configs/demo.yaml)
+      --model NAME        spm, spme or dfn (default)
       --mode NAME         cc, cv, cccv (default) or pulse
                           cv holds --hold-voltage and needs an
                           initial state at that voltage
@@ -459,7 +462,7 @@ const SolveReport r = ida_integrate(model, y, yp, t_event, t_event + hold,
 | --- | --- |
 | `src/main.cpp` | 命令行入口，解析参数、模型与工况 |
 | `include/dfn/models/cell_model.hpp` | SPM/SPMe/DFN 公共接口 |
-| `include/dfn/models/{spm,spme,dfn}.hpp` | 三个模型的具体实现 |
+| `include/dfn/models/spm.hpp`、`spme.hpp`、`dfn.hpp` | 三个模型的具体实现 |
 | `src/sim/simulation.cpp` | 分段驱动、事件、状态拼接、统计 |
 | `src/sim/config.cpp` | YAML 配置到 `SimulationConfig` |
 | `tests/test_simulation.cpp` | 完整性、守恒、工况回归 |

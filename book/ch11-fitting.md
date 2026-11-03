@@ -21,7 +21,7 @@ $$
 \tag{11.1}
 $$
 
-其中 $k_s$ 是两个电极共用的动力学尺度（真实参数 $k_{\mathrm{neg}}$、$k_{\mathrm{pos}}$ 同乘 $e^{k_s}$）。为什么不分别拟合两个 $k$？全电池电压只看到两个过电位之差，$k_{\mathrm{neg}}$ 与 $k_{\mathrm{pos}}$ 的电压签名几乎一样；同时放开会让敏感度矩阵出现接近共线的两列，参数无法分开。分电极的 $k$ 需要半电池或 EIS 数据。这是本章第一个"数据决定模型"的例子。
+其中 $k_s$ 是两个电极共用的动力学尺度（真实参数 $k_{\mathrm{neg}}$、$k_{\mathrm{pos}}$ 同乘 $k_s=e^{\theta_1}$，$\theta_1=\ln k_s$）。为什么不分别拟合两个 $k$？全电池电压只看到两个过电位之差，$k_{\mathrm{neg}}$ 与 $k_{\mathrm{pos}}$ 的电压签名几乎一样；同时放开会让敏感度矩阵出现接近共线的两列，参数无法分开。分电极的 $k$ 需要半电池或 EIS 数据。这是本章第一个"数据决定模型"的例子。
 
 取对数的原因很实际：$k$ 与 $D_s$ 跨几个数量级、必须为正；对数把"乘性误差"变成"加性误差"，也让敏感度有了统一定义——参数变化 1% 时电压变多少。
 
@@ -113,16 +113,16 @@ $$
 \tag{11.5}
 $$
 
-$r_i=(V_i^{\mathrm{sim}}-V_i^{\mathrm{exp}})/\sigma_i$。$\lambda$ 大时退化为小步梯度下降，$\lambda$ 小时接近 Gauss–Newton；每次拒绝步就把 $\lambda$ 放大，接受就缩小。Jacobian 用前向差分：3 个参数每轮只需 3 次额外正演。
+$r_i=(V_i^{\mathrm{sim}}-V_i^{\mathrm{exp}})/\sigma_i$ 是归一化残差；本章的 $J$ 都由它求导，所以 $W=I$（若改用原始残差，则 $W=\operatorname{diag}(1/\sigma_i^2)$）。$\lambda$ 大时退化为小步梯度下降，$\lambda$ 小时接近 Gauss–Newton；每次拒绝步就把 $\lambda$ 放大，接受就缩小。Jacobian 用前向差分：3 个参数每轮只需 3 次额外正演。
 
 收敛后，参数的不确定度近似为
 
 $$
-\Sigma_\theta\approx\sigma^2\bigl(J^\top W J\bigr)^{-1}
+\Sigma_\theta\approx\bigl(J^\top W J\bigr)^{-1}.
 \tag{11.6}
 $$
 
-95% 置信区间取 $1.96\sqrt{\Sigma_{\theta,jj}}$。表 11.3 是协议 C、8 个起点、1 mV 噪声的结果。
+这里的 $J$ 已经是按 $\sigma_i$ 归一化后的残差 Jacobian，所以 $W=I$；若改用未归一化的敏感度矩阵，则要写成 $\Sigma_\theta\approx\sigma^2(J^\top J)^{-1}$。95% 置信区间取 $1.96\sqrt{\Sigma_{\theta,jj}}$。表 11.3 是协议 C、8 个起点、1 mV 噪声的结果。
 
 **表 11.3** 协议 C 的拟合结果（1 mV 噪声，8 个起点，约 0.5 s）
 
