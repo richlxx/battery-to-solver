@@ -13,6 +13,8 @@
 | pybind11、yaml-cpp、Catch2 | 绑定/配置/测试 | vcpkg |
 | uv | Python 环境 | 独立安装 |
 
+macOS 用户注意：上面的 Eigen3/SUNDIALS 等依赖在 macOS 上**用 Homebrew 更省事**——`brew install cmake sundials` 即可（Homebrew 的 sundials 公式自带 KLU，不需要 overlay）。不装任何第三方库也能构建除 IDA 外的全部代码（见 B.6）。
+
 ## B.2 第一个程序：不装任何依赖
 
 第 0–2 章的 lab 不需要第三方库；`ocv_curve` 还用到仓库里的 `src/thermo.cpp`：
@@ -56,6 +58,27 @@ ctest --test-dir build-klu -C Release --output-on-failure
 - `build_msvc_klu.bat` 会自动打开 `-DDFN_USE_KLU=ON` 并把 `CMAKE_PREFIX_PATH` 指向 vcpkg 的 `installed/x64-windows`。
 - 若配置时报 `SUNDIALS::sunlinsolklu is missing`，说明 vcpkg 装的是不带 KLU 的官方包，先卸载再按上面的 overlay 命令重装。
 
+### macOS 上带 IDA + KLU 的构建（第 8 章）
+
+macOS 不需要 vcpkg：Homebrew 的 sundials 公式构建时就启用了 KLU。
+
+```bash
+brew install cmake sundials
+scripts/build_unix.sh --klu --test
+# 等价的手动命令：
+cmake -S . -B build-klu -DDFN_USE_KLU=ON \
+  -DCMAKE_PREFIX_PATH="$(brew --prefix)" \
+  -DOpenMP_ROOT="$(brew --prefix)/opt/libomp"
+cmake --build build-klu -j
+ctest --test-dir build-klu --output-on-failure
+```
+
+说明：
+
+- AppleClang 不自带 OpenMP，而 SuiteSparse 的 CMake 配置会查找 OpenMP，所以要装 Homebrew 的 libomp（`brew install sundials` 时会自动带上）并用 `OpenMP_ROOT` 指过去。
+- 本项目按 SUNDIALS 7.x 编写，Homebrew 当前提供的 7.x 版本已实测通过（macOS 27 / AppleClang 21 / SUNDIALS 7.9.0，26 项测试全部通过）。
+- Unix 上单配置生成器不区分 Release/Debug，可执行文件直接在 `build-klu/` 下（没有 `Release/` 子目录）。
+
 手动构建（Linux/macOS，或英文路径下的 Windows）：
 
 ```bash
@@ -95,11 +118,18 @@ uv venv .venv
 uv pip install -i https://pypi.tuna.tsinghua.edu.cn/simple pybamm matplotlib
 ```
 
-先让 C++ 程序生成曲线，再对比：
+先让 C++ 程序生成曲线，再对比。Windows：
+
+```bat
+build-klu\Release\dfn-sim --mode cc --crate 1 --dt 60 --out results\cc.csv
+.venv\Scripts\python.exe scripts\compare_pybamm.py results\cc.csv --save results\cc.png
+```
+
+macOS / Linux（可执行文件在 `build-klu/` 下，Python 在 `.venv/bin/`）：
 
 ```bash
-build-klu/Release/dfn-sim --mode cc --crate 1 --dt 60 --out results/cc.csv
-.venv/Scripts/python.exe scripts/compare_pybamm.py results/cc.csv --save results/cc.png
+./build-klu/dfn-sim --mode cc --crate 1 --dt 60 --out results/cc.csv
+.venv/bin/python scripts/compare_pybamm.py results/cc.csv --save results/cc.png
 ```
 
 PyBaMM 首次导入较慢，属正常；参数映射写在 `scripts/compare_pybamm.py` 里，改参数时两边要一起改。
@@ -147,8 +177,10 @@ cmake -S . -B build-noklu -DDFN_USE_KLU=OFF
 
 ## B.7 常见问题
 
-- SUNDIALS 版本与 `SUNContext` API 不匹配：本项目按 7.8.0 编写；升级前先查发布说明，注意 `IDAInit`、`IDASetId` 等签名变化。
+- SUNDIALS 版本与 `SUNContext` API 不匹配：本项目按 7.x 编写；升级前先查发布说明，注意 `IDAInit`、`IDASetId` 等签名变化。
 - pybind11 与 PyBaMM 的 Python 版本冲突：两者使用独立 venv。
 - SuiteSparse 链接失败：确认 vcpkg 三元组与编译器架构一致（x64-windows）。
 - 中文路径导致构建失败：把仓库放在纯英文路径下，或使用 VS 自带的 CMake 4.x。
 - 运行时报 `找不到 sundials_ida.dll`：检查 DLL 是否被复制到 `build-klu\Release`，或把 `%VCPKG_ROOT%\installed\x64-windows\bin` 加入 `PATH`。
+- macOS 报 `SUNDIALS was not found`：确认 `CMAKE_PREFIX_PATH` 包含 `$(brew --prefix)`；若错误栈里出现 `Could NOT find OpenMP_C`，按 B.3 加 `-DOpenMP_ROOT="$(brew --prefix)/opt/libomp"`。
+- 第 11 章的 CUDA 实验在 macOS 上无法运行（NVIDIA 不再支持 macOS GPU），需在带 NVIDIA 显卡的 Windows/Linux 机器上进行。
