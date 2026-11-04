@@ -31,9 +31,29 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "book" / "assets"
 PREVIEW = False
 
+
+def _pick_cjk_font():
+    """First installed CJK font, so the script also works on macOS/Linux."""
+    from matplotlib import font_manager
+
+    candidates = [
+        "Microsoft YaHei",
+        "PingFang SC",
+        "Hiragino Sans GB",
+        "Noto Sans CJK SC",
+        "Source Han Sans SC",
+        "WenQuanYi Zen Hei",
+    ]
+    installed = {f.name for f in font_manager.fontManager.ttflist}
+    for name in candidates:
+        if name in installed:
+            return name
+    return "sans-serif"
+
+
 plt.rcParams.update(
     {
-        "font.family": "Microsoft YaHei",
+        "font.family": _pick_cjk_font(),
         "axes.unicode_minus": False,
         "svg.fonttype": "path",
         "figure.dpi": 110,
@@ -182,6 +202,100 @@ def tangent_figure():
     ax.grid(alpha=0.3)
     ax.legend(loc="upper left", frameon=False)
     save(fig, "fig01-tangent.svg")
+
+
+def bc_figure():
+    fig, axes = plt.subplots(1, 3, figsize=(9.6, 2.7))
+    panels = [
+        ("给定值（Dirichlet）", "$c=c_b$"),
+        ("给定通量（Neumann）", "$-D\\,\\partial c/\\partial x=F_b$"),
+        ("混合（Robin）", "$F_b=\\gamma\\,(c-c_\\infty)$"),
+    ]
+    for ax, (title, formula) in zip(axes, panels):
+        ax.add_patch(
+            Rectangle(
+                (0.16, 0.40),
+                0.62,
+                0.16,
+                facecolor=PALE_BLUE,
+                edgecolor="#5b616b",
+                lw=1.2,
+            )
+        )
+        xs = np.linspace(0.16, 0.78, 100)
+        ax.plot(xs, 0.78 - 0.34 * (xs - 0.16) / 0.62, color=BLUE, lw=1.8)
+        ax.text(0.47, 0.90, "求解区域里的浓度", ha="center", fontsize=9, color=GRAY)
+        ax.set_title(title, fontsize=11)
+        ax.text(0.47, 0.16, formula, ha="center", fontsize=11, color=INK)
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.axis("off")
+    axes[0].plot([0.16], [0.78], "s", ms=9, color=ORANGE)
+    axes[0].annotate("$c_b$", (0.16, 0.78), xytext=(0.03, 0.80), fontsize=11,
+                     color=ORANGE)
+    arrow(axes[1], (0.78, 0.48), (0.95, 0.48), color=ORANGE)
+    axes[1].annotate("$F_b$", (0.95, 0.30), fontsize=11, color=ORANGE)
+    arrow(axes[2], (0.78, 0.51), (0.94, 0.51), color=ORANGE)
+    arrow(axes[2], (0.94, 0.44), (0.78, 0.44), color=GRAY)
+    axes[2].annotate("$c_\\infty$", (0.86, 0.28), fontsize=11, color=GRAY)
+    fig.tight_layout()
+    save(fig, "fig01-bc.svg")
+
+
+def taylor_figure():
+    x = np.linspace(-1.15, 1.35, 400)
+    fig, ax = plt.subplots(figsize=(6.0, 4.0))
+    ax.plot(x, np.exp(x), color=BLUE, lw=2.2, label="$f(x)=e^x$")
+    ax.plot(x, 1.0 + x, color=GREEN, lw=1.6, ls="--",
+            label="一次近似（切线，线性化）")
+    ax.plot(x, 1.0 + x + x * x / 2.0, color=ORANGE, lw=1.6, ls="-.",
+            label="二次近似（含曲率项）")
+    ax.plot(x, np.ones_like(x), color=GRAY, lw=1.4, ls=":", label="零次近似（常数）")
+    ax.plot([0.0], [1.0], "o", color=INK)
+    ax.annotate("$x_0$", (0, 0), xytext=(0, -0.3), ha="center", fontsize=10)
+    ax.annotate(
+        "离 $x_0$ 越远，低阶近似越走样",
+        xy=(1.05, 2.86),
+        xytext=(-1.0, 3.1),
+        arrowprops={"arrowstyle": "->", "color": GRAY},
+        fontsize=9,
+        color=INK,
+    )
+    ax.set_xlim(-1.15, 1.35)
+    ax.set_ylim(-0.45, 4.0)
+    ax.set_xlabel("$x$")
+    ax.set_ylabel("$f(x)$")
+    ax.grid(alpha=0.3)
+    ax.legend(loc="upper left", frameon=False)
+    save(fig, "fig02-taylor.svg")
+
+
+def lstsq_figure():
+    t = np.array([0.0, 1.0, 2.0, 3.0, 4.0])
+    rng = np.random.default_rng(11)
+    v = 1.05 + 0.95 * t + rng.normal(0.0, 0.13, t.size)
+    design = np.vstack([np.ones_like(t), t]).T
+    a, b = np.linalg.lstsq(design, v, rcond=None)[0]
+
+    tt = np.linspace(-0.35, 4.35, 100)
+    fig, ax = plt.subplots(figsize=(6.0, 4.0))
+    ax.plot(tt, a + b * tt, color=ORANGE, lw=1.8, label="最小二乘直线")
+    ax.plot(t, v, "o", ms=6, color=BLUE, label="带噪声的数据")
+    for ti, vi in zip(t, v):
+        ax.plot([ti, ti], [vi, a + b * ti], color=GRAY, lw=1.2, ls="--")
+    ax.annotate(
+        "残差：竖直虚线\n平方和最小的那条直线",
+        xy=(t[1], v[1]),
+        xytext=(1.7, 2.2),
+        arrowprops={"arrowstyle": "->", "color": GRAY},
+        fontsize=9,
+        color=INK,
+    )
+    ax.set_xlabel("$t$")
+    ax.set_ylabel("$V$")
+    ax.grid(alpha=0.3)
+    ax.legend(loc="upper left", frameon=False)
+    save(fig, "fig02-lstsq.svg")
 
 
 def error_figure():
@@ -1024,6 +1138,9 @@ def main():
     figures = {
         "ocv": ocv_figure,
         "tangent": tangent_figure,
+        "bc": bc_figure,
+        "taylor": taylor_figure,
+        "lstsq": lstsq_figure,
         "error": error_figure,
         "dfn": dfn_figure,
         "ladder": ladder_figure,
