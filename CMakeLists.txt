@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
-project(numerical_p2d VERSION 0.1.0 LANGUAGES CXX)
+# 启用 C 语言：SUNDIALS/SuiteSparse 的 CMake 配置会 find_dependency(OpenMP/MPI)，
+# 语言探测需要 C/CXX 都已启用。
+project(numerical_p2d VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -128,8 +130,14 @@ if(DFN_USE_KLU)
   target_link_libraries(dfn-sim PRIVATE dfn_ida)
 
   # SUNDIALS is built as a shared library by vcpkg; copy the DLLs next to
-  # each executable so that tests run without touching PATH.
+  # each executable so that tests run without touching PATH. Windows only:
+  # on Unix, dylib/so install names already point at the install prefix and
+  # $<TARGET_RUNTIME_DLLS> is empty, which would leave copy_if_different
+  # without an input file.
   function(dfn_copy_runtime_dlls target)
+    if(NOT WIN32)
+      return()
+    endif()
     add_custom_command(TARGET ${target} POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
         $<TARGET_RUNTIME_DLLS:${target}> $<TARGET_FILE_DIR:${target}>

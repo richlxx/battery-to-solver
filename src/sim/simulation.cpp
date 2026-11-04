@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <memory>
@@ -344,6 +345,12 @@ void write_csv(const SimulationReport& report, std::ostream& out) {
 }
 
 void write_csv(const SimulationReport& report, const std::string& path) {
+  // --out results/cc.csv 这类路径的父目录可能尚不存在，先建出来。
+  const std::filesystem::path parent =
+      std::filesystem::path(path).parent_path();
+  if (!parent.empty()) {
+    std::filesystem::create_directories(parent);
+  }
   std::ofstream file(path);
   if (!file) {
     throw std::runtime_error("cannot open " + path + " for writing");

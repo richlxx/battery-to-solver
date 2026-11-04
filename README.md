@@ -40,6 +40,8 @@ cmake --build build -j
 ./build/ocv_curve --n 101
 ```
 
+也可以用一键脚本 `scripts/build_unix.sh`（加 `--test` 顺便跑测试）。
+
 第一条曲线就能画出来：输出 `soc,sto_neg,sto_pos,ocv_v` 四列 CSV。
 
 ## 目录结构
@@ -61,8 +63,8 @@ scripts/    构建、画图与对比脚本
 
 ## 可选组件
 
-- **IDA + KLU（第 8 章起）**：需要 vcpkg 与 SUNDIALS 的 KLU overlay，构建命令见 [附录 B](book/appendix/b-setup.md)，或直接运行 `scripts\build_msvc_klu.bat`。
-- **CUDA 批量正演（第 11 章）**：需要 NVIDIA GPU 与 CUDA Toolkit，设置 `CUDA_PATH` 后运行 `scripts\build_cuda.bat`；没有 GPU 也能完成其余各章。
+- **IDA + KLU（第 8 章起）**：Windows 需要 vcpkg 与 SUNDIALS 的 KLU overlay，运行 `scripts\build_msvc_klu.bat`；macOS 直接 `brew install cmake sundials` 后运行 `scripts/build_unix.sh --klu`。详见 [附录 B](book/appendix/b-setup.md)。
+- **CUDA 批量正演（第 11 章）**：需要 NVIDIA GPU 与 CUDA Toolkit，设置 `CUDA_PATH` 后运行 `scripts\build_cuda.bat`；macOS（含 Apple Silicon）无 NVIDIA CUDA 支持，无法运行本章实验，但没有 GPU 也能完成其余各章。
 
 ## 测试
 

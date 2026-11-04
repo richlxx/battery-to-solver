@@ -10,12 +10,6 @@
 
 namespace dfn {
 
-namespace {
-
-constexpr double kPi = 3.14159265358979323846;
-
-}  // namespace
-
 DfnModel::DfnModel(Params params, StateLayout layout, DfnOptions options)
     : params_(std::move(params)),
       layout_(layout),
