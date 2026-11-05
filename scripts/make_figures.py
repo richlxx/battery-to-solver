@@ -319,39 +319,61 @@ def error_figure():
     save(fig, "fig02-error.svg")
 
 
+def _pack_particles(ax, left, right, bottom, top, radius, edge, lw=0.7):
+    """六角错行密排的圆形颗粒：密而不重叠，行间错位形成堆叠感。"""
+    dx = 2.0 * radius * 1.06
+    dy = dx * np.sqrt(3) / 2
+    pad = radius * 1.15
+    left, right = left + pad, right - pad
+    bottom, top = bottom + pad, top - pad
+    y, row = bottom, 0
+    while y <= top:
+        offset = dx / 2 if row % 2 else 0.0
+        x = left + offset
+        while x <= right:
+            ax.add_patch(Circle((x, y), radius, facecolor="white",
+                                edgecolor=edge, lw=lw))
+            x += dx
+        y += dy
+        row += 1
+
+
 def dfn_figure():
     fig, (ax, ax2) = plt.subplots(
         1, 2, figsize=(9.4, 3.9), gridspec_kw={"width_ratios": [1.35, 1]}
     )
+    ax.set_aspect("equal")
 
+    # 集流体按材质着色：负极铜（暖橙），正极铝（银灰）。
+    copper = ("#e2ac82", "#a96b3f")
+    aluminum = ("#dde2e6", "#9aa4ad")
     layers = [
-        (0.0, 0.45, PALE_GRAY, "负极\n集流体"),
-        (0.45, 3.05, PALE_BLUE, "负极"),
-        (3.05, 4.25, "#f6f2df", "隔膜"),
-        (4.25, 6.85, PALE_ORANGE, "正极"),
-        (6.85, 7.30, PALE_GRAY, "正极\n集流体"),
+        (0.0, 0.45, copper, "负极集流体（铜）", "#8a4f26"),
+        (0.45, 3.05, (PALE_BLUE, "#8a8f98"), "负极", None),
+        (3.05, 4.25, ("#f6f2df", "#8a8f98"), "隔膜", None),
+        (4.25, 6.85, (PALE_ORANGE, "#8a8f98"), "正极", None),
+        (6.85, 7.30, aluminum, "正极集流体（铝）", "#5a626b"),
     ]
-    for left, right, color, label in layers:
+    for left, right, (fill, edge), label, text_color in layers:
         ax.add_patch(
-            Rectangle((left, 0.0), right - left, 2.0, facecolor=color,
-                      edgecolor="#8a8f98", lw=0.8)
+            Rectangle((left, 0.0), right - left, 2.0, facecolor=fill,
+                      edgecolor=edge, lw=0.8)
         )
-        ax.text(
-            (left + right) / 2,
-            1.0 if label != "隔膜" else 0.35,
-            label,
-            ha="center",
-            va="center",
-            fontsize=9.5,
-        )
+        if left < 0.1 or left > 6.8:  # 集流体窄条：竖排文字
+            ax.text((left + right) / 2, 1.0, label, rotation=90,
+                    ha="center", va="center", fontsize=8.5,
+                    color=text_color or INK)
+        else:  # 电极区颗粒密集，标签垫白底保证可读
+            ax.text((left + right) / 2, 1.0, label, ha="center",
+                    va="center", fontsize=10,
+                    bbox={"boxstyle": "round,pad=0.28",
+                          "facecolor": "white", "edgecolor": "none",
+                          "alpha": 0.88})
 
-    rng = np.random.default_rng(3)
-    for left, right in [(0.55, 3.0), (4.3, 6.8)]:
-        for _ in range(26):
-            cx = rng.uniform(left + 0.12, right - 0.12)
-            cy = rng.uniform(0.2, 1.8)
-            ax.add_patch(Circle((cx, cy), 0.09, facecolor="white",
-                                edgecolor=GRAY, lw=0.7, alpha=0.95))
+    # 正极颗粒明显大于负极颗粒（典型 NMC vs 石墨的粒径对比）。
+    _pack_particles(ax, 0.45, 3.05, 0.0, 2.0, radius=0.105, edge=BLUE)
+    _pack_particles(ax, 4.25, 6.85, 0.0, 2.0, radius=0.158, edge=ORANGE,
+                    lw=0.8)
 
     for xpos in (1.4, 2.2, 3.6, 5.0, 5.9):
         arrow(ax, (xpos, 2.2), (xpos + 0.55, 2.2), color=ORANGE)
