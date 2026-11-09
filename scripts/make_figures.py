@@ -256,7 +256,9 @@ def taylor_figure():
     ax.annotate(
         "离 $x_0$ 越远，低阶近似越走样",
         xy=(1.05, 2.86),
-        xytext=(-1.0, 3.1),
+        xytext=(-1.08, 2.2),
+        ha="left",
+        va="center",
         arrowprops={"arrowstyle": "->", "color": GRAY},
         fontsize=9,
         color=INK,
