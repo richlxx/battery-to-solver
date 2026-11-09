@@ -19,6 +19,7 @@
 | 隐式方法 | implicit method | 下一步出现在方程两边，需要求解 |
 | 稳定性 | stability | 误差不会被算法放大 |
 | 稀疏矩阵 | sparse matrix | 绝大多数元素为零的矩阵 |
+| spy 图 | spy plot | 把矩阵非零元的位置画成点阵的图，只显示连接关系，不显示数值 |
 | 填充 | fill-in | 消元过程中新产生的非零元 |
 | Jacobian | Jacobian matrix | 多维函数的偏导数矩阵 |
 | 残差 | residual | 把当前解代回方程后的偏差 |
