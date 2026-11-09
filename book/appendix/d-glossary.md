@@ -19,6 +19,11 @@
 | 隐式方法 | implicit method | 下一步出现在方程两边，需要求解 |
 | 稳定性 | stability | 误差不会被算法放大 |
 | 稀疏矩阵 | sparse matrix | 绝大多数元素为零的矩阵 |
+| 三对角矩阵 | tridiagonal matrix | 只有主对角线及上下两条相邻对角线可能非零 |
+| 块三对角 | block tridiagonal | 以小块为元素的三对角矩阵 |
+| LU 分解 | LU factorization | 把 $A$ 写成下三角 $L$ 与上三角 $U$ 的乘积 |
+| 增广矩阵 | augmented matrix | 系数矩阵右侧接上常数列，写成 $[A\mid b]$ |
+| 初等行变换 | elementary row operation | 交换两行、某行乘非零数、一行加上另一行的倍数；不改变方程组的解 |
 | spy 图 | spy plot | 把矩阵非零元的位置画成点阵的图，只显示连接关系，不显示数值 |
 | 填充 | fill-in | 消元过程中新产生的非零元 |
 | Jacobian | Jacobian matrix | 多维函数的偏导数矩阵 |
