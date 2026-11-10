@@ -1016,6 +1016,41 @@ def stability_figure():
     save(fig, "fig07-stability.svg")
 
 
+def bdf_order_figure():
+    hs = np.array([0.2, 0.1, 0.05, 0.025, 0.0125])
+    exact = np.exp(-1.0)
+    err1, err2 = [], []
+    for h in hs:
+        steps = int(round(1.0 / h))
+        y = 1.0
+        for _ in range(steps):
+            y /= 1.0 + h
+        err1.append(abs(y - exact))
+        y_prev = 1.0
+        y_curr = 1.0 / (1.0 + h)
+        for _ in range(steps - 1):
+            y_next = (4.0 / 3.0 * y_curr - 1.0 / 3.0 * y_prev) / (1.0 + 2.0 / 3.0 * h)
+            y_prev, y_curr = y_curr, y_next
+        err2.append(abs(y_curr - exact))
+    err1 = np.array(err1)
+    err2 = np.array(err2)
+
+    fig, ax = plt.subplots(figsize=(6.0, 4.0))
+    ax.loglog(hs, err1, "o-", color=GREEN, lw=1.6, ms=5, label="BDF1（隐式欧拉）")
+    ax.loglog(hs, err2, "s-", color=BLUE, lw=1.6, ms=5, label="BDF2")
+    ax.loglog(hs, err1[1] * (hs / hs[1]) ** 1, ":", color=GRAY, lw=1.0,
+              label="斜率 $-1$ 参考")
+    ax.loglog(hs, err2[1] * (hs / hs[1]) ** 2, "--", color=GRAY, lw=1.0,
+              label="斜率 $-2$ 参考")
+    ax.set_xlabel("步长 $h$")
+    ax.set_ylabel("$t=1$ 处的误差")
+    ax.set_title("$y'=-y$：步长减半，BDF1 误差减半、BDF2 误差减到 1/4")
+    ax.grid(True, which="both", alpha=0.25)
+    ax.legend(loc="upper left", frameon=False, fontsize=9)
+    fig.tight_layout()
+    save(fig, "fig07-bdf-order.svg")
+
+
 def fit_figures(workdir):
     wd = pathlib.Path(workdir)
     kappas = {}
@@ -1175,6 +1210,7 @@ def main():
         "newton": newton_figure,
         "ida": ida_figure,
         "stability": stability_figure,
+        "bdforder": bdf_order_figure,
         "protocol": protocol_figure,
     }
 
