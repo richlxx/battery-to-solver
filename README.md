@@ -38,7 +38,7 @@ build\Release\ocv_curve.exe --n 101
 scripts\open_vs.bat
 ```
 
-它会生成并打开 `build-vs\numerical_p2d.sln`。若已安装 SUNDIALS/KLU（`VCPKG_ROOT` 或本地 `vcpkg_installed`），脚本会自动启用 `DFN_USE_KLU`；否则生成不带 IDA/KLU 后端的解决方案，`dfn-sim` 仍可编译，但运行时会提示需要 KLU。
+它会按已安装的 Visual Studio 版本选择生成器，生成并打开 `build-vs` 下的解决方案（旧版为 `numerical_p2d.sln`，VS 2026 为 `numerical_p2d.slnx`）。若已安装 SUNDIALS/KLU（`VCPKG_ROOT` 或本地 `vcpkg_installed`），脚本会自动启用 `DFN_USE_KLU`；否则生成不带 IDA/KLU 后端的解决方案，`dfn-sim` 仍可编译，但运行时会提示需要 KLU。
 
 Linux / macOS：
 
