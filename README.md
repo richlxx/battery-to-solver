@@ -32,6 +32,14 @@ scripts\build_msvc.bat
 build\Release\ocv_curve.exe --n 101
 ```
 
+想在 Visual Studio 里浏览代码、断点调试，运行一次：
+
+```bat
+scripts\open_vs.bat
+```
+
+它会生成并打开 `build-vs\numerical_p2d.sln`。若已安装 SUNDIALS/KLU（`VCPKG_ROOT` 或本地 `vcpkg_installed`），脚本会自动启用 `DFN_USE_KLU`；否则生成不带 IDA/KLU 后端的解决方案，`dfn-sim` 仍可编译，但运行时会提示需要 KLU。
+
 Linux / macOS：
 
 ```bash
@@ -43,6 +51,21 @@ cmake --build build -j
 也可以用一键脚本 `scripts/build_unix.sh`（加 `--test` 顺便跑测试）。
 
 第一条曲线就能画出来：输出 `soc,sto_neg,sto_pos,ocv_v` 四列 CSV。
+
+## 在 Visual Studio 中浏览与调试
+
+解决方案按用途分成四个解决方案文件夹，避免几十个工程平铺在一起：
+
+| 分组 | 内容 |
+| --- | --- |
+| Applications | `dfn-sim` 命令行 |
+| Libraries | `dfn_core`、`dfn_ida`（启用 KLU 时） |
+| Labs | 每章的单文件实验 |
+| Tests | 单元测试与 CTest 辅助工程 |
+
+`dfn_core` 内部再按 `Sources/models`、`Sources/solvers`、`Headers/models` 等过滤器组织，与仓库目录一一对应。头文件已加入工程，可以直接在解决方案资源管理器里跳转。
+
+默认启动项目是 `dfn-sim`，按 **F5** 会用 Debug 配置运行 SPM 恒流放电示例，工作目录已设为仓库根目录，因此能直接读取 `configs/` 下的参数文件。改成 DFN/CCCV 等场景时，在“项目属性 → 调试 → 命令参数”里修改即可。要调试某个 lab，右键该实验选择“设为启动项目”后按 F5。
 
 ## 目录结构
 

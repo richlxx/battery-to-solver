@@ -13,11 +13,16 @@ option(DFN_BUILD_TESTS "Build tests" ON)
 option(DFN_USE_KLU "Enable the SUNDIALS IDA + KLU backend" OFF)
 option(DFN_USE_CUDA "Build the CUDA batch lab (needs an NVIDIA GPU)" OFF)
 
-add_library(dfn_core STATIC
+# Visual Studio puts targets in solution folders and shows source files in
+# filters based on the source_group() calls below.
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
+set(DFN_CORE_SOURCES
   src/params.cpp
   src/state.cpp
   src/grid.cpp
   src/operators.cpp
+  src/thermo.cpp
   src/linalg/dense.cpp
   src/linalg/tridiagonal.cpp
   src/solvers/newton.cpp
@@ -29,21 +34,62 @@ add_library(dfn_core STATIC
   src/models/spm.cpp
   src/models/spme.cpp
   src/models/dfn.cpp
-  src/thermo.cpp
   src/sim/config.cpp
   src/sim/simulation.cpp)
+
+set(DFN_PUBLIC_HEADERS
+  include/dfn/grid.hpp
+  include/dfn/operators.hpp
+  include/dfn/params.hpp
+  include/dfn/state.hpp
+  include/dfn/thermo.hpp
+  include/dfn/version.hpp
+  include/dfn/fit/levenberg_marquardt.hpp
+  include/dfn/fit/spm_batch.hpp
+  include/dfn/linalg/dense.hpp
+  include/dfn/linalg/tridiagonal.hpp
+  include/dfn/models/cell_model.hpp
+  include/dfn/models/chain_dae.hpp
+  include/dfn/models/dfn.hpp
+  include/dfn/models/reaction.hpp
+  include/dfn/models/spm.hpp
+  include/dfn/models/spme.hpp
+  include/dfn/sim/config.hpp
+  include/dfn/sim/simulation.hpp
+  include/dfn/solvers/bdf2.hpp
+  include/dfn/solvers/bdf2_dae.hpp
+  include/dfn/solvers/dae.hpp
+  include/dfn/solvers/idaklu.hpp
+  include/dfn/solvers/newton.hpp)
+
+add_library(dfn_core STATIC ${DFN_CORE_SOURCES} ${DFN_PUBLIC_HEADERS})
 target_include_directories(dfn_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_compile_features(dfn_core PUBLIC cxx_std_20)
 
+# Keep the Solution Explorer layout aligned with the directory layout:
+# Sources/models, Sources/solvers, Headers/models, ...
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Sources"
+             FILES ${DFN_CORE_SOURCES})
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/include/dfn" PREFIX "Headers"
+             FILES ${DFN_PUBLIC_HEADERS})
+
 if(MSVC)
-  target_compile_options(dfn_core PUBLIC /W4 /permissive-)
+  target_compile_options(dfn_core PUBLIC /W4 /permissive- /utf-8)
 else()
   target_compile_options(dfn_core PUBLIC -Wall -Wextra -Wpedantic)
 endif()
 
 add_executable(dfn-sim src/main.cpp)
 target_link_libraries(dfn-sim PRIVATE dfn_core)
+
+set_target_properties(dfn_core PROPERTIES FOLDER "Libraries")
+set_target_properties(dfn-sim PROPERTIES
+  FOLDER "Applications"
+  VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  VS_DEBUGGER_COMMAND_ARGUMENTS "--model spm --mode cc --crate 1 --dt 60")
+set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY
+             VS_STARTUP_PROJECT dfn-sim)
 
 if(DFN_BUILD_LABS)
   add_executable(ocv_curve labs/ocv_curve.cpp)
@@ -66,6 +112,15 @@ if(DFN_BUILD_LABS)
   target_link_libraries(fv_conservation PRIVATE dfn_core)
   add_executable(param_fit labs/param_fit.cpp)
   target_link_libraries(param_fit PRIVATE dfn_core)
+
+  set(DFN_LAB_TARGETS
+    ocv_curve diff_error linear_solve newton_scalar euler_stiff euler_decay
+    bdf2_demo sparsity_map fv_conservation param_fit)
+  foreach(lab IN LISTS DFN_LAB_TARGETS)
+    set_target_properties(${lab} PROPERTIES
+      FOLDER "Labs"
+      VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+  endforeach()
 endif()
 
 if(DFN_USE_CUDA AND DFN_BUILD_LABS)
@@ -94,6 +149,9 @@ if(DFN_USE_CUDA AND DFN_BUILD_LABS)
   if(MSVC)
     target_compile_options(spm_batch PRIVATE /utf-8)
   endif()
+  set_target_properties(spm_batch PROPERTIES
+    FOLDER "Labs"
+    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 endif()
 
 if(DFN_USE_KLU)
@@ -111,6 +169,7 @@ if(DFN_USE_KLU)
   endif()
 
   add_library(dfn_ida STATIC src/solvers/idaklu.cpp)
+  set_target_properties(dfn_ida PROPERTIES FOLDER "Libraries")
   target_link_libraries(dfn_ida PUBLIC
     dfn_core
     SUNDIALS::ida
@@ -152,6 +211,7 @@ if(DFN_USE_KLU)
     SUNDIALS::nvecserial)
   dfn_copy_runtime_dlls(klu_probe)
   dfn_copy_runtime_dlls(dfn-sim)
+  set_target_properties(klu_probe PROPERTIES FOLDER "Tests")
 
   if(DFN_BUILD_LABS)
     add_executable(ida_compare labs/ida_compare.cpp)
@@ -165,6 +225,12 @@ if(DFN_USE_KLU)
     add_executable(model_compare labs/model_compare.cpp)
     target_link_libraries(model_compare PRIVATE dfn_ida)
     dfn_copy_runtime_dlls(model_compare)
+
+    foreach(lab ida_compare dfn_discharge model_compare)
+      set_target_properties(${lab} PROPERTIES
+        FOLDER "Labs"
+        VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+    endforeach()
   endif()
 endif()
 
@@ -271,4 +337,22 @@ if(BUILD_TESTING AND DFN_BUILD_TESTS)
     add_test(NAME sparsity_map_runs COMMAND sparsity_map)
     add_test(NAME fv_conservation_runs COMMAND fv_conservation)
   endif()
+
+  foreach(test_target
+      dfn_smoke dfn_state_tests dfn_discretization_tests dfn_linear_tests
+      dfn_newton_tests dfn_bdf2_tests dfn_dae_tests dfn_dfn_tests
+      dfn_sim_tests dfn_spm_tests dfn_spme_tests dfn_fit_tests dfn_ida_tests
+      dfn_dfn_ida_tests klu_probe)
+    if(TARGET ${test_target})
+      set_target_properties(${test_target} PROPERTIES FOLDER "Tests")
+    endif()
+  endforeach()
+
+  # CTest's helper projects are not part of the application; tuck them away.
+  foreach(ctest_target
+      RUN_TESTS Continuous Experimental Nightly NightlyMemoryCheck)
+    if(TARGET ${ctest_target})
+      set_target_properties(${ctest_target} PROPERTIES FOLDER "Tests/CTest")
+    endif()
+  endforeach()
 endif()
