@@ -10,26 +10,29 @@
 
 namespace dfn {
 
+// Levenberg-Marquardt 最小二乘：用正演模型残差对参数做拟合。
+// 头文件内为模板实现，残差回调由调用方提供（例如 SPM 批量模型）。
+
 struct LmOptions {
-  int max_iterations = 50;
-  int max_backtracks = 12;
-  double initial_lambda = 1e-3;
-  double step = 1e-6;       // forward-difference step in parameter space
-  double xtol = 1e-9;
-  double ftol = 1e-12;
+  int max_iterations = 50;       // 外层迭代次数上限
+  int max_backtracks = 12;       // 每次迭代内放大阻尼重试的次数上限
+  double initial_lambda = 1e-3;  // 初始阻尼系数
+  double step = 1e-6;            // 参数空间前向差分步长
+  double xtol = 1e-9;            // 参数步长收敛阈值（相对）
+  double ftol = 1e-12;           // 代价下降量收敛阈值（相对）
 };
 
 struct LmResult {
-  bool ok = false;
-  int iterations = 0;
-  int evaluations = 0;
-  double cost = std::numeric_limits<double>::quiet_NaN();
-  std::vector<double> theta;
-  std::vector<double> residual;
+  bool ok = false;  // 是否正常结束（收敛或到达迭代上限）
+  int iterations = 0;    // 外层迭代次数
+  int evaluations = 0;   // 残差求值次数（含差分扰动）
+  double cost = std::numeric_limits<double>::quiet_NaN();  // 0.5 * ||r||^2
+  std::vector<double> theta;     // 最优参数
+  std::vector<double> residual;  // 最优参数处的残差向量
 };
 
-// Minimizes 0.5 * ||r(theta)||^2. The callback returns false when the
-// forward model fails; a failed trial is treated like a rejected step.
+// 最小化 0.5 * ||r(theta)||^2。回调返回 false 表示正演模型失败，
+// 该试探点按被拒绝的步处理。
 template <typename Residual>
 LmResult levenberg_marquardt(std::vector<double> theta, Residual&& residual,
                              const LmOptions& options = {}) {
@@ -57,6 +60,7 @@ LmResult levenberg_marquardt(std::vector<double> theta, Residual&& residual,
     return 0.5 * sum;
   };
 
+  // cost 为当前代价，lambda 为阻尼；result 始终保存当前最优解。
   double cost = cost_of(r);
   double lambda = options.initial_lambda;
   result.theta = theta;
@@ -75,7 +79,7 @@ LmResult levenberg_marquardt(std::vector<double> theta, Residual&& residual,
   std::vector<double> trial = theta;
 
   for (int iteration = 0; iteration < options.max_iterations; ++iteration) {
-    // Forward-difference Jacobian: one forward solve per parameter.
+    // 前向差分 Jacobian：每个参数一次正演。
     for (int j = 0; j < n; ++j) {
       trial = theta;
       trial[static_cast<std::size_t>(j)] += options.step;
@@ -89,6 +93,7 @@ LmResult levenberg_marquardt(std::vector<double> theta, Residual&& residual,
       }
     }
 
+    // 组装正规方程：normal = J^T J，gradient = J^T r。
     for (int i = 0; i < n; ++i) {
       gradient[static_cast<std::size_t>(i)] = 0.0;
       for (int j = 0; j < n; ++j) {
@@ -105,6 +110,8 @@ LmResult levenberg_marquardt(std::vector<double> theta, Residual&& residual,
       }
     }
 
+    // 解 (J^T J + lambda * diag(J^T J)) delta = -J^T r；求解失败或代价不降
+    // 就放大 lambda（更接近梯度下降）后重试。
     bool accepted = false;
     for (int backtrack = 0; backtrack < options.max_backtracks; ++backtrack) {
       std::vector<std::vector<double>> system = normal;
@@ -141,6 +148,7 @@ LmResult levenberg_marquardt(std::vector<double> theta, Residual&& residual,
       for (int i = 0; i < n; ++i) {
         trial[static_cast<std::size_t>(i)] += delta[static_cast<std::size_t>(i)];
       }
+      // 代价下降则接受新点并缩小阻尼；下降量小于 ftol 视为收敛。
       if (evaluate(trial, r_trial)) {
         const double trial_cost = cost_of(r_trial);
         if (trial_cost < cost) {
@@ -164,6 +172,7 @@ LmResult levenberg_marquardt(std::vector<double> theta, Residual&& residual,
       lambda *= 5.0;
     }
 
+    // 未接受任何步，或参数步长已足够小，则终止迭代。
     result.iterations = iteration + 1;
     double step_norm = 0.0;
     double theta_norm = 0.0;

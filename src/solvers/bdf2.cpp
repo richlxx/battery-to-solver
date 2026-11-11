@@ -1,3 +1,7 @@
+// 定步长 BDF2 积分器，用于显式给出右端项的常微分方程 y' = f(t, y)。
+// 第一个时间步用 BDF1（隐式 Euler）启动，之后切换到二阶 BDF2；
+// 每一步的隐式方程都用 Newton 求解，主要供教学与对照使用。
+
 #include "dfn/solvers/bdf2.hpp"
 
 #include <algorithm>
@@ -8,6 +12,11 @@
 
 namespace dfn {
 
+// 从 t0 积分到 t_end：把区间均分成 n_steps 步，实际步长 dt = (t_end-t0)/n_steps。
+// 参数：rhs/jacobian 为右端项 f(t, y) 与 ∂f/∂y；y0 为初始状态（长度 n）；
+//       h 为期望步长（向上取整成整数步）；options 为 Newton 容差与迭代上限。
+// 返回：Bdf2Result，t[k] 与 y[k] 分别是第 k 个输出时刻及其状态向量。
+// 索引约定：Jacobian 采用 J[i][j] = ∂f_i/∂y_j，与 newton_solve 保持一致。
 Bdf2Result bdf2_integrate(const RhsFunction& rhs,
                           const RhsJacobian& jacobian,
                           std::vector<double> y0,
@@ -23,6 +32,7 @@ Bdf2Result bdf2_integrate(const RhsFunction& rhs,
   }
 
   const int n = static_cast<int>(y0.size());
+  // 步数用 ceil 并留 1e-12 余量，避免浮点误差多算一步；再把区间均分成等步长。
   const int n_steps = std::max(
       1, static_cast<int>(std::ceil((t_end - t0) / h - 1e-12)));
   const double dt = (t_end - t0) / static_cast<double>(n_steps);
@@ -38,8 +48,11 @@ Bdf2Result bdf2_integrate(const RhsFunction& rhs,
 
   for (int step = 0; step < n_steps; ++step) {
     const double t_new = t + dt;
+    // 启动步没有 y_{n-1} 可用，只能用一阶 BDF1；第二步起才切换到 BDF2。
     const bool use_bdf2 = have_previous_step;
 
+    // Newton 初值：BDF2 用线性外推 y_{n+1} ≈ 2·y_n - y_{n-1}，
+    // BDF1 直接用 y_n；好的初值能明显减少内层迭代次数。
     std::vector<double> guess = y_curr;
     if (use_bdf2) {
       for (int j = 0; j < n; ++j) {
@@ -49,6 +62,10 @@ Bdf2Result bdf2_integrate(const RhsFunction& rhs,
       }
     }
 
+    // 残差就是 BDF 公式移项的结果：
+    //   BDF2: y - (4/3)·y_n + (1/3)·y_{n-1} - (2/3)·dt·f(t_{n+1}, y) = 0
+    //   BDF1: y - y_n - dt·f(t_{n+1}, y) = 0
+    // f 在 t_{n+1} 与未知的 y 处取值，所以是隐式方程，需要 Newton 迭代求解。
     const auto residual = [&](const std::vector<double>& y) {
       const std::vector<double> f = rhs(t_new, y);
       if (static_cast<int>(f.size()) != n) {
@@ -72,6 +89,8 @@ Bdf2Result bdf2_integrate(const RhsFunction& rhs,
       return r;
     };
 
+    // 隐式方程对 y 的 Jacobian：I - factor·∂f/∂y，
+    // 其中 factor = (2/3)·dt（BDF2）或 dt（BDF1），与残差中的系数一一对应。
     const auto jac = [&](const std::vector<double>& y) {
       const std::vector<std::vector<double>> dfdy = jacobian(t_new, y);
       if (static_cast<int>(dfdy.size()) != n) {
@@ -91,6 +110,7 @@ Bdf2Result bdf2_integrate(const RhsFunction& rhs,
       return J;
     };
 
+    // 每个时间步解一次非线性方程组；Newton 不收敛就放弃后续步并标记失败。
     NewtonOptions newton_options;
     newton_options.tolerance = options.newton_tolerance;
     newton_options.max_iterations = options.newton_max_iterations;
@@ -102,6 +122,7 @@ Bdf2Result bdf2_integrate(const RhsFunction& rhs,
       break;
     }
 
+    // 接受该步：滚动历史（y_prev/y_curr），推进时间并记录输出。
     y_prev = y_curr;
     y_curr = newton.x;
     t = t_new;

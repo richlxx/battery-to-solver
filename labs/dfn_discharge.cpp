@@ -7,10 +7,16 @@
 #include "dfn/models/dfn.hpp"
 #include "dfn/solvers/idaklu.hpp"
 
+// 第 9 章配套实验：用完整 DFN 模型跑恒流放电，演示最小端到端流程。
+// 第一部分是网格收敛表（V(60 s)、未知量数 n、非零元 nnz、步数、Jacobian 次数、
+// 耗时）；第二部分是 CC 放电到 3.5 V 截止后转 CV 保持的电压与电流输出。
+
 namespace {
 
 using Clock = std::chrono::steady_clock;
 
+// 统一的 IDA 调用封装：导数初值取零向量，由 IDA 自行计算一致初值；
+// rtol 由调用者给定，atol 用模型建议值，*ms 回传墙钟耗时（毫秒）。
 dfn::SolveReport run_cc(dfn::DfnModel& model, const std::vector<double>& y0,
                         double t_end, double rtol, double* ms,
                         const std::vector<double>& output_times = {}) {
@@ -27,6 +33,8 @@ dfn::SolveReport run_cc(dfn::DfnModel& model, const std::vector<double>& y0,
   return report;
 }
 
+// 网格收敛性研究：固定电流密度 8 A/m^2，同时改变 x 方向（负极/隔膜/正极）
+// 与径向（nr）网格数，观察 60 s 端电压、步数、Jacobian 次数与耗时的变化。
 void grid_convergence(const dfn::Params& params) {
   struct LayoutSpec {
     int nx_neg;
@@ -36,6 +44,8 @@ void grid_convergence(const dfn::Params& params) {
     int nr_pos;
   };
 
+  // 对一组网格规格依次求解并打印表格，以最细网格为参考解，
+  // 计算各级电压误差与相邻两级的观测收敛阶 log2(e_k / e_{k+1})。
   const auto study = [&params](const char* name,
                                const std::vector<LayoutSpec>& specs) {
     std::cout << "== " << name << ": V at t = 60 s, 8 A/m^2 ==\n";
@@ -63,6 +73,7 @@ void grid_convergence(const dfn::Params& params) {
                 << report.steps << "\t" << report.jacobian_evals << "\t"
                 << model.terminal_voltage(report.y.data()) << "\t" << ms << "\n";
     }
+    // 最细网格的结果作为参考解；收敛良好时观测阶应为正且趋于格式阶数。
     const double reference = voltages.back();
     std::cout << "differences vs finest:\n";
     for (std::size_t k = 0; k + 1 < voltages.size(); ++k) {
@@ -80,6 +91,8 @@ void grid_convergence(const dfn::Params& params) {
     std::cout << "\n";
   };
 
+  // 三级研究分别只加密 x、只加密径向、以及两者同时加密，
+  // 用来分离空间离散误差与径向（颗粒内扩散）离散误差。
   study("x refinement (n_r fixed at 8)",
         {{4, 2, 4, 8, 8}, {8, 4, 8, 8, 8}, {16, 8, 16, 8, 8}, {32, 16, 32, 8, 8}});
   study("radial refinement (n_x fixed at 8/4/8)",
@@ -88,6 +101,8 @@ void grid_convergence(const dfn::Params& params) {
         {{4, 2, 4, 4, 4}, {8, 4, 8, 6, 6}, {16, 8, 16, 8, 8}, {32, 16, 32, 12, 12}});
 }
 
+// 先以 8 A/m^2 恒流放电，用 IDA 事件定位端电压跌破 3.5 V 的时刻；
+// 再从事件状态出发把边界条件切换为 3.5 V 恒压，观察电流如何衰减。
 void cc_cv_curve(const dfn::Params& params) {
   dfn::DfnOptions control;
   control.applied_current_density = 8.0;
@@ -100,6 +115,7 @@ void cc_cv_curve(const dfn::Params& params) {
   cc.rtol = 1e-6;
   cc.atol = model.suggested_atol();
   cc.calculate_consistent_initial = true;
+  // 事件函数：端电压与截止电压之差过零时触发，IDA 记录 t_event 并停止。
   cc.events.push_back([&model, cutoff](double, const double* y, const double*) {
     return model.terminal_voltage(y) - cutoff;
   });
@@ -122,6 +138,7 @@ void cc_cv_curve(const dfn::Params& params) {
   std::cout << "event at " << cc_report.t_event << " s, steps "
             << cc_report.steps << ", jac " << cc_report.jacobian_evals << "\n\n";
 
+  // 切换到恒压模式：初值沿用 CC 结束时的 y 与 yp，保证状态连续。
   model.set_applied_voltage(cutoff);
   dfn::IdaOptions cv;
   cv.rtol = 1e-6;
@@ -148,6 +165,7 @@ void cc_cv_curve(const dfn::Params& params) {
 
 }  // namespace
 
+// 实验入口：先做网格收敛分析，再跑 CC→CV 放电曲线。
 int main() {
   std::cout << std::setprecision(6);
   const dfn::Params params = dfn::make_demo_params();

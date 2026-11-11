@@ -1,3 +1,5 @@
+// 参数文件加载器：解析 configs/*.yaml 使用的扁平 YAML 子集，
+// 把键值写入 Params 并在最后统一做物理合法性校验。
 #include "dfn/sim/config.hpp"
 
 #include <cctype>
@@ -9,6 +11,7 @@ namespace dfn {
 
 namespace {
 
+// 去掉字符串首尾的空白字符（空格、制表符、回车等），返回新的子串。
 std::string trim(const std::string& text) {
   std::size_t begin = 0;
   while (begin < text.size() &&
@@ -23,6 +26,8 @@ std::string trim(const std::string& text) {
   return text.substr(begin, end - begin);
 }
 
+// 把一段文本解析成 double。要求整段文本都是数字（不接受尾部多余字符），
+// 失败时抛出带行号的 runtime_error，方便定位配置文件里的错误位置。
 double parse_number(const std::string& text, int line) {
   try {
     std::size_t used = 0;
@@ -37,6 +42,10 @@ double parse_number(const std::string& text, int line) {
   }
 }
 
+// 把一条 "key: value" 写入 Params 对应的字段。
+// section 是当前顶层段（cell / negative / positive / separator / electrolyte），
+// value 为该键的数值，line 仅用于生成带行号的报错信息。
+// 未知段或未知键一律报错，避免拼写错误导致静默沿用默认值。
 void assign(Params& params, const std::string& section, const std::string& key,
             double value, int line) {
   ElectrodeParams* electrode = nullptr;
@@ -124,6 +133,11 @@ void assign(Params& params, const std::string& section, const std::string& key,
 
 }  // namespace
 
+// 读取参数文件并返回 Params。支持的 YAML 子集：
+//   * 行内 '#' 之后的内容视为注释，先剔除；
+//   * 形如 "section:" 的行切换当前段，形如 "key: value" 的行赋值；
+//   * 以 make_demo_params() 为默认基线，文件只覆盖出现的键。
+// 解析结束后调用 validate() 检查参数范围，出错时抛出异常。
 Params load_params_yaml(const std::string& path) {
   std::ifstream file(path);
   if (!file) {
@@ -137,6 +151,7 @@ Params load_params_yaml(const std::string& path) {
 
   while (std::getline(file, line)) {
     ++line_number;
+    // 去掉 '#' 之后的行内注释。
     const std::size_t comment = line.find('#');
     if (comment != std::string::npos) {
       line.erase(comment);
@@ -154,6 +169,7 @@ Params load_params_yaml(const std::string& path) {
     const std::string key = trim(line.substr(0, colon));
     const std::string rest = trim(line.substr(colon + 1));
 
+    // 冒号后为空说明这一行是段名（section），而不是键值对。
     if (rest.empty()) {
       section = key;
       continue;

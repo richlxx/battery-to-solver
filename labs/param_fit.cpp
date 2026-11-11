@@ -19,20 +19,29 @@
 #include "dfn/linalg/dense.hpp"
 #include "dfn/sim/config.hpp"
 
+// 第 11 章配套实验：用 SPM 批量正演配合 Levenberg-Marquardt 做参数辨识。
+// 四个子命令：--generate 生成带高斯噪声的合成数据，--sensitivity 输出敏感度
+// 矩阵与条件数，--fit 拟合并报告 relerr/chi2_red/sigma_theta，--evaluate 打分。
+
 namespace {
 
 using dfn::fit::BatchRow;
 using dfn::fit::BatchSegment;
 
+// 默认采样间隔（s）、径向网格数，以及合成噪声/拟合噪声的标准差（V）。
 constexpr double kDefaultDt = 5.0;
 constexpr int kDefaultNr = 20;
 constexpr double kDefaultSigma = 1e-3;
 
+// 测试工况：由若干恒定电流段组成，每段给出时长（s）与电流密度（A/m^2），
+// 正电流表示放电、负电流表示充电、0 表示静置。
 struct Protocol {
   std::string name;
   std::vector<BatchSegment> segments;
 };
 
+// 三个工况由弱到强：a 只有一段恒流放电；b 增加静置和充电；c 再加入
+// 高倍率脉冲，用于检验参数在宽电流范围下的可辨识性。
 Protocol make_protocol(std::string_view name) {
   if (name == "a") {
     return {"a", {{1200.0, 18.0}}};
@@ -55,6 +64,7 @@ Protocol make_protocol(std::string_view name) {
   throw std::runtime_error("protocol must be a, b or c");
 }
 
+// CSV 列顺序为 t_s, current_a_m2, voltage_v；电压单位为 V。
 void write_rows(const std::vector<BatchRow>& rows, const std::string& path) {
   std::ofstream file(path);
   if (!file) {
@@ -67,6 +77,8 @@ void write_rows(const std::vector<BatchRow>& rows, const std::string& path) {
   }
 }
 
+// 读取与 write_rows 相同格式的 CSV，跳过表头；样本数少于 3 时直接报错，
+// 以保证后续误差统计和条件数计算有意义。
 std::vector<BatchRow> read_rows(const std::string& path) {
   std::ifstream file(path);
   if (!file) {
@@ -96,13 +108,14 @@ std::vector<BatchRow> read_rows(const std::string& path) {
   return rows;
 }
 
-// theta = (ln kinetic scale, ln D_neg, ln D_pos). A single kinetic scale is
-// used because the full-cell voltage cannot separate the two electrodes'
-// rate constants; chapter 11 discusses this at length.
+// 拟合变量 theta = (ln 动力学缩放, ln D_neg, ln D_pos)，取对数保证参数为正
+// 并改善数值缩放。两个电极共用同一个动力学缩放，因为全电池电压无法区分两侧
+// 反应速率常数，第 11 章对此有详细讨论。
 std::vector<double> log_parameters(const dfn::Params& params) {
   return {0.0, std::log(params.neg.d_s), std::log(params.pos.d_s)};
 }
 
+// 把 theta 还原为物理参数：两侧 k 同乘 exp(theta[0])，D_s 取指数。
 dfn::Params apply_parameters(dfn::Params params,
                              const std::vector<double>& theta) {
   const double kinetic_scale = std::exp(theta[0]);
@@ -113,6 +126,8 @@ dfn::Params apply_parameters(dfn::Params params,
   return params;
 }
 
+// 中心差分敏感度 S_ij = dV_i / dtheta_j，步长取 1e-3（对数参数无量纲）；
+// 每个参数需要正、反两次批量正演，返回按样本行组织、每行 3 列。
 std::vector<std::vector<double>> sensitivity(const dfn::Params& params,
                                              const std::vector<BatchRow>& rows,
                                              int nr, double dt,
@@ -137,6 +152,9 @@ std::vector<std::vector<double>> sensitivity(const dfn::Params& params,
   return columns;
 }
 
+// 计算归一化敏感度矩阵的条件数 kappa：先按列范数归一化得到 Gram 矩阵，
+// 再用 Jacobi 旋转求特征值，返回最大与最小特征值之比。
+// kappa 越大说明参数越难独立区分；若某列为零向量则返回无穷大。
 double condition_number(const std::vector<std::vector<double>>& columns) {
   const std::size_t n = columns.front().size();
   std::vector<double> norm(n, 0.0);
@@ -162,6 +180,7 @@ double condition_number(const std::vector<std::vector<double>>& columns) {
     }
   }
 
+  // Jacobi 迭代：每轮选绝对值最大的非对角元做旋转消去，最多 100 轮。
   for (int sweep = 0; sweep < 100; ++sweep) {
     double off = 0.0;
     std::size_t p = 0;
@@ -175,6 +194,7 @@ double condition_number(const std::vector<std::vector<double>>& columns) {
         }
       }
     }
+    // 非对角元已足够小，认为矩阵完成对角化。
     if (off < 1e-12) {
       break;
     }
@@ -205,6 +225,8 @@ double condition_number(const std::vector<std::vector<double>>& columns) {
                         : std::numeric_limits<double>::infinity();
 }
 
+// 打印归一化敏感度列之间的相关系数矩阵：接近 ±1 表示两个参数对电压的
+// 影响几乎同向，单独拟合时必然出现强耦合。
 void print_correlations(const std::vector<std::vector<double>>& columns) {
   const std::size_t n = columns.front().size();
   std::vector<double> norm(n, 0.0);
@@ -236,6 +258,8 @@ void print_correlations(const std::vector<std::vector<double>>& columns) {
   }
 }
 
+// 构造加权 Jacobian：敏感度除以噪声标准差 sigma，使残差按噪声水平归一化，
+// 之后的置信区间才具有统计意义。
 std::vector<std::vector<double>> normalized_jacobian(
     const dfn::Params& params, const std::vector<BatchRow>& rows, int nr,
     double dt, double sigma) {
@@ -252,6 +276,8 @@ std::vector<std::vector<double>> normalized_jacobian(
   return matrix;
 }
 
+// 由 (J^T J)^{-1} 的对角线估计参数标准差 sigma_theta（对数参数单位）；
+// 法方程奇异时只打印提示并返回，不中断整个实验。
 void print_confidence(const std::vector<std::vector<double>>& jacobian) {
   const std::size_t n = jacobian.front().size();
   std::vector<std::vector<double>> normal(n, std::vector<double>(n, 0.0));
@@ -283,11 +309,13 @@ void print_confidence(const std::vector<std::vector<double>>& jacobian) {
   std::cout << '\n';
 }
 
+// 生成零均值、标准差为 sigma 的高斯噪声（电压单位 V）。
 double gaussian(std::mt19937& rng, double sigma) {
   std::normal_distribution<double> distribution(0.0, sigma);
   return distribution(rng);
 }
 
+// 多起点 LM 的结果摘要：最优 theta、归一化代价与迭代次数。
 struct FitSummary {
   std::vector<double> theta;
   double cost = 0.0;
@@ -296,6 +324,8 @@ struct FitSummary {
 
 }  // namespace
 
+// 命令行入口：解析实验参数后按 action 分派到 generate / sensitivity /
+// evaluate / fit 四个子命令；真正的拟合工作交给下方的 LM 驱动代码。
 int main(int argc, char** argv) {
   std::string config_path = "configs/fit_demo.yaml";
   std::string protocol_name = "c";
@@ -420,6 +450,7 @@ int main(int argc, char** argv) {
     const dfn::Params params = dfn::load_params_yaml(config_path);
     const Protocol protocol = make_protocol(protocol_name);
 
+    // 合成数据：按协议批量正演，再叠加标准差为 noise 的高斯噪声（V）。
     if (action == "generate") {
       if (out_path.empty()) {
         throw std::runtime_error("--generate needs --out");
@@ -443,6 +474,7 @@ int main(int argc, char** argv) {
     const std::vector<BatchRow> rows = read_rows(data_path);
     const double sample_dt = rows[1].t - rows[0].t;
 
+    // 敏感度分析：打印条件数与相关系数矩阵，可选写出逐时刻敏感度 CSV。
     if (action == "sensitivity") {
       const auto columns = sensitivity(params, rows, nr, sample_dt);
       std::cout << std::setprecision(6);
@@ -465,6 +497,7 @@ int main(int argc, char** argv) {
       return 0;
     }
 
+    // 评估模式：只做一次正演，报告 RMSE 与最大偏差（mV），不优化参数。
     if (action == "evaluate") {
       if (theta_text.empty()) {
         throw std::runtime_error("--evaluate needs --theta");
@@ -499,6 +532,8 @@ int main(int argc, char** argv) {
       throw std::runtime_error("choose --generate, --fit, --sensitivity or --evaluate");
     }
 
+    // 拟合模式：以配置文件参数为真值；0 号起点直接从真值出发，
+    // 其余起点加 U(-1.2, 1.2) 的扰动，用于检测 LM 是否陷入局部极小。
     const std::vector<double> truth = log_parameters(params);
     std::mt19937 rng(seed + 1);
     std::uniform_real_distribution<double> spread(-1.2, 1.2);
@@ -506,6 +541,8 @@ int main(int argc, char** argv) {
       return dfn::fit::simulate_rows(apply_parameters(params, theta), rows, nr,
                                      sample_dt);
     };
+    // 加权残差 r_i = (V_pred - V_data)/sigma；模型抛异常或出现非有限值时
+    // 返回 false，让 LM 判定该步不可接受并收缩信赖域。
     const auto residual = [&](const std::vector<double>& theta,
                               std::vector<double>& values) {
       try {
@@ -526,6 +563,7 @@ int main(int argc, char** argv) {
     FitSummary best;
     best.cost = std::numeric_limits<double>::infinity();
     const auto clock_start = std::chrono::steady_clock::now();
+    // 多起点循环：每个起点最多 60 次 LM 迭代，保留代价最小且成功的结果。
     for (int start = 0; start < std::max(1, starts); ++start) {
       std::vector<double> theta = truth;
       if (start > 0) {
@@ -561,6 +599,8 @@ int main(int argc, char** argv) {
               << " d_neg_fit=" << std::exp(best.theta[1])
               << " d_pos_true=" << params.pos.d_s
               << " d_pos_fit=" << std::exp(best.theta[2]) << '\n';
+    // relerr 是各参数相对真值的误差；chi2_red 为约化卡方，接近 1 说明
+    // 残差已降到噪声水平。第 0 个参数的真值按 1.0（无缩放）计。
     std::cout << "relerr=";
     for (std::size_t j = 0; j < truth.size(); ++j) {
       const double reference = j == 0 ? 1.0 : std::exp(truth[j]);
@@ -571,6 +611,7 @@ int main(int argc, char** argv) {
               << 2.0 * best.cost /
                      static_cast<double>(rows.size() - best.theta.size())
               << " iterations=" << best.iterations << '\n';
+    // 在最优参数处重算敏感度，估计参数标准差与条件数。
     const auto jacobian = normalized_jacobian(
         apply_parameters(params, best.theta), rows, nr, sample_dt, sigma);
     print_confidence(jacobian);
@@ -578,6 +619,7 @@ int main(int argc, char** argv) {
               << condition_number(sensitivity(
                      apply_parameters(params, best.theta), rows, nr, sample_dt))
               << '\n';
+    // 输出数据与拟合曲线的逐点对照（t, I, V_data, V_fit），便于绘图检查。
     if (!curve_path.empty()) {
       std::ofstream file(curve_path);
       if (!file) {

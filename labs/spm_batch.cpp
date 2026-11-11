@@ -17,11 +17,19 @@
 #include "dfn/fit/spm_batch.hpp"
 #include "dfn/sim/config.hpp"
 
+// 第 11 章配套实验：用 NVRTC + CUDA Driver API 批量正演 SPM。
+// 每个 GPU 线程独立积分一个参数样本，输出各工况段末端的端电压，为 LM 拟合
+// 提供整批残差；打印 kernel_ms、per_sample_us 与 CPU 对照最大偏差 max_diff（V）。
+
 namespace {
 
+// 径向格点数上限，必须与内核字符串里的 MAX_CELLS 保持一致。
 constexpr int kMaxCells = 32;
+// 单个样本最多支持的工况段数（host 端固定数组大小）。
 constexpr int kMaxSegments = 16;
 
+// 以下结构体镜像内核字符串中的同名定义，字段顺序必须完全一致，
+// 因为 cuLaunchKernel 会按值把 DevParams 拷贝进内核。
 struct DevElectrode {
   double thickness;
   double radius;
@@ -48,6 +56,8 @@ struct DevSegment {
   double current;
 };
 
+// CUDA 内核源码放在原始字符串中，运行时由 NVRTC 编译；字符串内部不能加注释，
+// 否则会进入编译单元。改动算法时请与下方 cpu_probes 的参考实现保持一致。
 const char* kKernelSource = R"NVRTC(
 #define MAX_CELLS 32
 
@@ -235,6 +245,11 @@ extern "C" __global__ void spm_batch_kernel(
 }
 )NVRTC";
 
+// 内核流程：每个线程取一组参数样本，用 prepare 预分解两个电极的三对角
+// Thomas 矩阵，逐段推进球扩散，段末用下一段电流计算端电压并写入 probes。
+// 探针按 segment-major 排列：probes[s * n + sample]。
+
+// 统一的错误检查：失败时取出 CUDA / NVRTC 的错误字符串并抛出异常。
 void check_cuda(CUresult status, const char* what) {
   if (status != CUDA_SUCCESS) {
     const char* message = nullptr;
@@ -251,6 +266,8 @@ void check_nvrtc(nvrtcResult status, const char* what) {
   }
 }
 
+// 把 CPU 侧 dfn::Params 拷贝成内核所需的扁平结构体；
+// 法拉第常数与气体常数使用 fit 模块导出的常量，保证两端一致。
 DevParams make_device(const dfn::Params& p) {
   DevParams d;
   d.neg = {p.neg.thickness, p.neg.radius, p.neg.porosity, p.neg.c_max,
@@ -266,18 +283,23 @@ DevParams make_device(const dfn::Params& p) {
   return d;
 }
 
+// 与 param_fit 的 protocol c 完全相同的复合工况：每项为（时长 s，电流 A/m^2），
+// 正电流放电、负电流充电、零表示静置。
 std::vector<dfn::fit::BatchSegment> protocol_c() {
   return {{600.0, 0.0},   {1200.0, 18.0}, {1800.0, 0.0},
           {1200.0, -18.0}, {1800.0, 0.0},  {600.0, 36.0},
           {1800.0, 0.0},  {300.0, 72.0},   {1800.0, 0.0}};
 }
 
+// 一批评测样本：动力学缩放（对数域）与两个电极的固相扩散系数。
 struct Samples {
   std::vector<double> kinetic;
   std::vector<double> d_neg;
   std::vector<double> d_pos;
 };
 
+// 样本生成：动力学缩放取 U(-1, 1) 的对数值，D_s 在基准值上乘以 exp(U(-1, 1))，
+// 与 param_fit 的 theta 参数化保持一致；固定种子保证可复现。
 Samples make_samples(int n, const dfn::Params& p, unsigned seed) {
   std::mt19937 rng(seed);
   std::uniform_real_distribution<double> u(-1.0, 1.0);
@@ -295,6 +317,9 @@ Samples make_samples(int n, const dfn::Params& p, unsigned seed) {
   return samples;
 }
 
+// CPU 参考实现：先用 rows_from_protocol 生成完整采样网格，再对每个样本正演
+// 整条工况，只保留每段末端的电压。indices 由段时长/dt 四舍五入累加得到，
+// 与内核里 steps = round(duration/dt) 的取整方式一致。
 std::vector<double> cpu_probes(const dfn::Params& base, const Samples& samples,
                                int n, int nr, double dt,
                                const std::vector<dfn::fit::BatchSegment>& segs,
@@ -328,6 +353,7 @@ std::vector<double> cpu_probes(const dfn::Params& base, const Samples& samples,
       run(i);
     }
   } else {
+    // 多线程版本用原子计数器动态领任务，避免样本耗时不均导致负载失衡。
     std::atomic<int> next{0};
     std::vector<std::thread> workers;
     workers.reserve(static_cast<std::size_t>(threads));
@@ -351,6 +377,8 @@ std::vector<double> cpu_probes(const dfn::Params& base, const Samples& samples,
 
 }  // namespace
 
+// 命令行入口：先构造参数样本，再走 GPU 批量正演（或仅 CPU 参考路径），
+// 可选与 CPU 结果逐点比对；输出平均内核耗时和单样本微秒数。
 int main(int argc, char** argv) {
   std::string config_path = "configs/fit_demo.yaml";
   int n = 65536;
@@ -425,8 +453,10 @@ int main(int argc, char** argv) {
     }
     const dfn::Params params = dfn::load_params_yaml(config_path);
     const std::vector<dfn::fit::BatchSegment> segments = protocol_c();
+    // 固定种子 11，保证 GPU 与 CPU 参考实现使用同一批样本。
     const Samples samples = make_samples(n, params, 11);
 
+    // 仅 CPU 模式：只跑参考实现，报告总耗时与单样本耗时。
     if (cpu_only) {
       const auto start = std::chrono::steady_clock::now();
       const std::vector<double> reference =
@@ -441,6 +471,7 @@ int main(int argc, char** argv) {
       return 0;
     }
 
+    // 初始化驱动、取计算能力（如 8.6），用于生成 NVRTC 的目标架构。
     check_cuda(cuInit(0), "cuInit");
     CUdevice device;
     check_cuda(cuDeviceGet(&device, 0), "cuDeviceGet");
@@ -463,6 +494,7 @@ int main(int argc, char** argv) {
                                     std::to_string(major) +
                                     std::to_string(minor);
     const char* options[] = {"--std=c++17", arch_option.c_str()};
+    // 以 compute_XY 为目标编译；失败时打印完整编译日志便于定位内核错误。
     const nvrtcResult compiled =
         nvrtcCompileProgram(program, 2, options);
     if (compiled != NVRTC_SUCCESS) {
@@ -501,6 +533,7 @@ int main(int argc, char** argv) {
     CUdeviceptr d_probes = 0;
     const std::size_t probe_count =
         static_cast<std::size_t>(n) * segments.size();
+    // 设备缓冲：三组样本参数、工况段数组，以及 n * 段数 个探针结果。
     check_cuda(cuMemAlloc(&d_kinetic, n * sizeof(double)), "cuMemAlloc");
     check_cuda(cuMemAlloc(&d_dneg, n * sizeof(double)), "cuMemAlloc");
     check_cuda(cuMemAlloc(&d_dpos, n * sizeof(double)), "cuMemAlloc");
@@ -519,6 +552,7 @@ int main(int argc, char** argv) {
                             sizeof(DevSegment) * segments.size()),
                "cuMemcpyHtoD");
 
+    // 每个 block 128 线程，grid 按样本数向上取整；一个线程处理一个样本。
     const int block = 128;
     const int grid = (n + block - 1) / block;
     int n_segments = static_cast<int>(segments.size());
@@ -532,6 +566,7 @@ int main(int argc, char** argv) {
                  "cuLaunchKernel");
     };
     launch();
+    // 先热身一次并同步，避免把首次启动/缓存开销计入下面的计时。
     check_cuda(cuCtxSynchronize(), "warm-up");
 
     CUevent start_event;
@@ -539,6 +574,7 @@ int main(int argc, char** argv) {
     check_cuda(cuEventCreate(&start_event, CU_EVENT_DEFAULT), "cuEventCreate");
     check_cuda(cuEventCreate(&stop_event, CU_EVENT_DEFAULT), "cuEventCreate");
     check_cuda(cuEventRecord(start_event, nullptr), "cuEventRecord");
+    // 用 CUDA event 测量 repeat 次启动的总时间，再取平均内核时间（ms）。
     for (int r = 0; r < repeat; ++r) {
       launch();
     }
@@ -555,6 +591,7 @@ int main(int argc, char** argv) {
                "cuMemcpyDtoH");
 
     double max_diff = 0.0;
+    // 对照检查只取前 16 个样本，比较每个段末电压，记录最大绝对差（V）。
     if (check) {
       const int check_n = std::min(n, 16);
       const std::vector<double> reference =
@@ -591,6 +628,7 @@ int main(int argc, char** argv) {
     cuEventDestroy(stop_event);
     cuModuleUnload(module);
     cuCtxDestroy(context);
+    // 数值不一致（最大差 > 1e-9 V）时返回非零退出码，便于 CI 判定失败。
     return check && max_diff > 1e-9 ? 1 : 0;
   } catch (const std::exception& error) {
     std::cerr << "error: " << error.what() << "\n";

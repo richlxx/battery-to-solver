@@ -12,8 +12,13 @@
 #include "dfn/models/spme.hpp"
 #include "dfn/solvers/idaklu.hpp"
 
+// 第 3 章与第 10 章配套实验：在同一放电工况下比较 SPM、SPMe 与 DFN。
+// 三模型都以 3.5 V 为截止电压放电，以 DFN 曲线为参考，输出规模（n、nnz）、
+// 截止时间、电压 RMSE 与最大偏差（mV）、墙钟耗时和积分步数。
+
 namespace {
 
+// 一条完整放电曲线：输出时间点、对应端电压，以及规模和误差等统计量。
 struct Curve {
   std::vector<double> t;
   std::vector<double> v;
@@ -26,6 +31,8 @@ struct Curve {
   int nnz = 0;
 };
 
+// 线性插值：把采样点较粗的模型曲线对齐到参考曲线的时间戳，
+// 两端超出范围时取端值（常数外推）。
 double interpolate(const Curve& curve, double t) {
   if (t <= curve.t.front()) {
     return curve.v.front();
@@ -43,6 +50,8 @@ double interpolate(const Curve& curve, double t) {
   return curve.v[k - 1] * (1.0 - w) + curve.v[k] * w;
 }
 
+// 统一积分流程：设置电流密度后从初值积分到 t_max，以端电压 3.5 V 作为
+// 停止事件，每 60 s 记录一个输出点；返回曲线并附带规模、步数与耗时。
 Curve run(dfn::CellModel& model, double current, double t_max) {
   model.set_current_density(current);
   const std::vector<double> y0 = model.initial_state();
@@ -52,6 +61,7 @@ Curve run(dfn::CellModel& model, double current, double t_max) {
   options.rtol = 1e-6;
   options.atol = model.suggested_atol();
   options.calculate_consistent_initial = true;
+  // 截止事件：端电压降到 3.5 V 时停止积分。
   options.events.push_back(
       [&model](double, const double* y, const double*) {
         return model.terminal_voltage(y) - 3.5;
@@ -83,6 +93,8 @@ Curve run(dfn::CellModel& model, double current, double t_max) {
   return curve;
 }
 
+// 计算 curve 相对参考曲线的电压误差：RMSE 与最大绝对偏差，
+// 只在两条曲线共同覆盖的时间段 [0, min(t_end)] 内统计，单位与电压相同（V）。
 void compare(Curve& curve, const Curve& reference) {
   if (curve.t.empty() || reference.t.empty()) {
     return;
@@ -115,6 +127,7 @@ struct Row {
 
 int main() {
   const dfn::Params params = dfn::make_demo_params();
+  // 1C 对应 36 A/m^2，用于把电流密度换算成 C-rate 列。
   const double i_1c = 36.0;
   const double t_max = 20000.0;
 
@@ -124,13 +137,16 @@ int main() {
   std::cout << "I(A/m^2)\tC-rate\tmodel\tn\tnnz\tt_cut(s)\tRMSE(mV)"
                "\tmax(mV)\twall(ms)\tsteps\n";
 
+  // 五个电流密度覆盖约 0.06C 到 2C，逐点比较三模型。
   for (double current : {2.0, 8.0, 16.0, 36.0, 72.0}) {
+    // 三个模型共用参数和 x 方向网格；SPM 没有电解液相，只有径向网格。
     dfn::DfnModel dfn(
         params, dfn::make_layout(8, 4, 8, 6, 6),
         dfn::DfnOptions{dfn::ControlMode::current, current, 0.0});
     dfn::SpmeModel spme(params, 8, 4, 8, 6, 6);
     dfn::SpmModel spm(params, 20, 20);
 
+    // 第 0 行 DFN 作为参考曲线，后两行分别与它比较。
     Row rows[] = {{current, "dfn", run(dfn, current, t_max)},
                   {current, "spme", run(spme, current, t_max)},
                   {current, "spm", run(spm, current, t_max)}};
