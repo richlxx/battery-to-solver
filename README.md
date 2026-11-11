@@ -59,13 +59,16 @@ cmake --build build -j
 | 分组 | 内容 |
 | --- | --- |
 | Applications | `dfn-sim` 命令行 |
+| Applications/Model demos | `dfn-sim-spm`、`dfn-sim-spme`、`dfn-sim-dfn` 三个模型调试入口 |
 | Libraries | `dfn_core`、`dfn_ida`（启用 KLU 时） |
 | Labs | 每章的单文件实验 |
 | Tests | 单元测试与 CTest 辅助工程 |
 
 `dfn_core` 内部按 `Models`、`Solvers`、`Linear algebra`、`Simulation`、`Common`、`Fit` 分模块，每个模块的头文件与实现文件放在同一个过滤器下（例如 `Models` 中同时有 `dfn.hpp` 和 `dfn.cpp`），头文件已加入工程，可以直接跳转。
 
-默认启动项目是 `dfn-sim`，按 **F5** 会用 Debug 配置运行 SPM 恒流放电示例，工作目录已设为仓库根目录，因此能直接读取 `configs/` 下的参数文件。改成 DFN/CCCV 等场景时，在“项目属性 → 调试 → 命令参数”里修改即可。要调试某个 lab，右键该实验选择“设为启动项目”后按 F5。
+默认启动项目是 `dfn-sim`，按 **F5** 会用 Debug 配置运行 SPM 恒流放电示例，工作目录已设为仓库根目录，因此能直接读取 `configs/` 下的参数文件。改成 DFN/CCCV 等场景时，在“项目属性 → 调试 → 命令参数”里修改即可。
+
+`dfn-sim-spm`、`dfn-sim-spme`、`dfn-sim-dfn` 与 `dfn-sim` 共用同一份 `src/main.cpp`，只是调试命令参数已分别预设为该模型的典型工况（SPM/SPMe 为 1C 恒流，DFN 为 1C 恒流恒压）。想单步跟踪某个模型的装配、残差或 Jacobian 时，右键对应目标选择“设为启动项目”后按 F5 即可，不必每次手改命令行。要调试某个 lab，同样右键该实验选择“设为启动项目”后按 F5。
 
 ## 目录结构
 

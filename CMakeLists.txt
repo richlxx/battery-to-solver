@@ -121,6 +121,24 @@ set_target_properties(dfn-sim PROPERTIES
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY
              VS_STARTUP_PROJECT dfn-sim)
 
+# 每个模型一个调试入口：与 dfn-sim 共用 src/main.cpp，只是把 VS 的调试命令
+# 参数预设成对应模型。选中目标按 F5，即可直接进入该模型的装配与求解路径。
+set(DFN_MODEL_DEMOS spm spme dfn)
+set(DFN_DEMO_ARGS_spm "--model spm --mode cc --crate 1 --dt 60")
+set(DFN_DEMO_ARGS_spme "--model spme --mode cc --crate 1 --dt 60")
+set(DFN_DEMO_ARGS_dfn "--model dfn --mode cccv --crate 1 --dt 60")
+set(DFN_DEMO_TARGETS)
+foreach(model IN LISTS DFN_MODEL_DEMOS)
+  set(demo "dfn-sim-${model}")
+  add_executable(${demo} src/main.cpp)
+  target_link_libraries(${demo} PRIVATE dfn_core)
+  set_target_properties(${demo} PROPERTIES
+    FOLDER "Applications/Model demos"
+    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    VS_DEBUGGER_COMMAND_ARGUMENTS "${DFN_DEMO_ARGS_${model}}")
+  list(APPEND DFN_DEMO_TARGETS ${demo})
+endforeach()
+
 if(DFN_BUILD_LABS)
   add_executable(ocv_curve labs/ocv_curve.cpp)
   target_link_libraries(ocv_curve PRIVATE dfn_core)
@@ -218,7 +236,6 @@ if(DFN_USE_KLU)
   # dfn_core contains the simulation driver, whose IDA entry points live in
   # dfn_ida. Link the CLI against it and place the SUNDIALS DLLs next to it.
   target_link_libraries(dfn-sim PRIVATE dfn_ida)
-
   # SUNDIALS is built as a shared library by vcpkg; copy the DLLs next to
   # each executable so that tests run without touching PATH. Windows only:
   # on Unix, dylib/so install names already point at the install prefix and
@@ -242,6 +259,10 @@ if(DFN_USE_KLU)
     SUNDIALS::nvecserial)
   dfn_copy_runtime_dlls(klu_probe)
   dfn_copy_runtime_dlls(dfn-sim)
+  foreach(demo IN LISTS DFN_DEMO_TARGETS)
+    target_link_libraries(${demo} PRIVATE dfn_ida)
+    dfn_copy_runtime_dlls(${demo})
+  endforeach()
   set_target_properties(klu_probe PROPERTIES FOLDER "Tests")
 
   if(DFN_BUILD_LABS)
