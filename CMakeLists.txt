@@ -17,62 +17,92 @@ option(DFN_USE_CUDA "Build the CUDA batch lab (needs an NVIDIA GPU)" OFF)
 # filters based on the source_group() calls below.
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-set(DFN_CORE_SOURCES
+# Group each module's .cpp and .hpp files together in Solution Explorer, so
+# that reading a header next to its implementation does not require switching
+# between two separate source/header trees.
+set(DFN_COMMON_SOURCES
   src/params.cpp
   src/state.cpp
   src/grid.cpp
   src/operators.cpp
-  src/thermo.cpp
+  src/thermo.cpp)
+set(DFN_COMMON_HEADERS
+  include/dfn/params.hpp
+  include/dfn/state.hpp
+  include/dfn/grid.hpp
+  include/dfn/operators.hpp
+  include/dfn/thermo.hpp
+  include/dfn/version.hpp)
+
+set(DFN_LINALG_SOURCES
   src/linalg/dense.cpp
-  src/linalg/tridiagonal.cpp
-  src/solvers/newton.cpp
-  src/solvers/bdf2.cpp
-  src/solvers/dae.cpp
-  src/solvers/bdf2_dae.cpp
+  src/linalg/tridiagonal.cpp)
+set(DFN_LINALG_HEADERS
+  include/dfn/linalg/dense.hpp
+  include/dfn/linalg/tridiagonal.hpp)
+
+set(DFN_MODEL_SOURCES
   src/models/chain_dae.cpp
   src/models/reaction.cpp
   src/models/spm.cpp
   src/models/spme.cpp
-  src/models/dfn.cpp
-  src/sim/config.cpp
-  src/sim/simulation.cpp)
-
-set(DFN_PUBLIC_HEADERS
-  include/dfn/grid.hpp
-  include/dfn/operators.hpp
-  include/dfn/params.hpp
-  include/dfn/state.hpp
-  include/dfn/thermo.hpp
-  include/dfn/version.hpp
-  include/dfn/fit/levenberg_marquardt.hpp
-  include/dfn/fit/spm_batch.hpp
-  include/dfn/linalg/dense.hpp
-  include/dfn/linalg/tridiagonal.hpp
+  src/models/dfn.cpp)
+set(DFN_MODEL_HEADERS
   include/dfn/models/cell_model.hpp
   include/dfn/models/chain_dae.hpp
-  include/dfn/models/dfn.hpp
   include/dfn/models/reaction.hpp
   include/dfn/models/spm.hpp
   include/dfn/models/spme.hpp
-  include/dfn/sim/config.hpp
-  include/dfn/sim/simulation.hpp
+  include/dfn/models/dfn.hpp)
+
+set(DFN_SOLVER_SOURCES
+  src/solvers/newton.cpp
+  src/solvers/bdf2.cpp
+  src/solvers/dae.cpp
+  src/solvers/bdf2_dae.cpp)
+set(DFN_SOLVER_HEADERS
+  include/dfn/solvers/newton.hpp
   include/dfn/solvers/bdf2.hpp
-  include/dfn/solvers/bdf2_dae.hpp
   include/dfn/solvers/dae.hpp
-  include/dfn/solvers/idaklu.hpp
-  include/dfn/solvers/newton.hpp)
+  include/dfn/solvers/bdf2_dae.hpp
+  include/dfn/solvers/idaklu.hpp)
+
+set(DFN_SIM_SOURCES
+  src/sim/config.cpp
+  src/sim/simulation.cpp)
+set(DFN_SIM_HEADERS
+  include/dfn/sim/config.hpp
+  include/dfn/sim/simulation.hpp)
+
+set(DFN_FIT_HEADERS
+  include/dfn/fit/levenberg_marquardt.hpp
+  include/dfn/fit/spm_batch.hpp)
+
+set(DFN_CORE_SOURCES
+  ${DFN_COMMON_SOURCES}
+  ${DFN_LINALG_SOURCES}
+  ${DFN_MODEL_SOURCES}
+  ${DFN_SOLVER_SOURCES}
+  ${DFN_SIM_SOURCES})
+set(DFN_PUBLIC_HEADERS
+  ${DFN_COMMON_HEADERS}
+  ${DFN_LINALG_HEADERS}
+  ${DFN_MODEL_HEADERS}
+  ${DFN_SOLVER_HEADERS}
+  ${DFN_SIM_HEADERS}
+  ${DFN_FIT_HEADERS})
 
 add_library(dfn_core STATIC ${DFN_CORE_SOURCES} ${DFN_PUBLIC_HEADERS})
 target_include_directories(dfn_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_compile_features(dfn_core PUBLIC cxx_std_20)
 
-# Keep the Solution Explorer layout aligned with the directory layout:
-# Sources/models, Sources/solvers, Headers/models, ...
-source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Sources"
-             FILES ${DFN_CORE_SOURCES})
-source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/include/dfn" PREFIX "Headers"
-             FILES ${DFN_PUBLIC_HEADERS})
+source_group("Common" FILES ${DFN_COMMON_SOURCES} ${DFN_COMMON_HEADERS})
+source_group("Linear algebra" FILES ${DFN_LINALG_SOURCES} ${DFN_LINALG_HEADERS})
+source_group("Models" FILES ${DFN_MODEL_SOURCES} ${DFN_MODEL_HEADERS})
+source_group("Solvers" FILES ${DFN_SOLVER_SOURCES} ${DFN_SOLVER_HEADERS})
+source_group("Simulation" FILES ${DFN_SIM_SOURCES} ${DFN_SIM_HEADERS})
+source_group("Fit" FILES ${DFN_FIT_HEADERS})
 
 if(MSVC)
   target_compile_options(dfn_core PUBLIC /W4 /permissive- /utf-8)
@@ -169,6 +199,7 @@ if(DFN_USE_KLU)
   endif()
 
   add_library(dfn_ida STATIC src/solvers/idaklu.cpp)
+  source_group("Solvers" FILES src/solvers/idaklu.cpp)
   set_target_properties(dfn_ida PROPERTIES FOLDER "Libraries")
   target_link_libraries(dfn_ida PUBLIC
     dfn_core

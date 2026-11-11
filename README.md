@@ -63,7 +63,7 @@ cmake --build build -j
 | Labs | 每章的单文件实验 |
 | Tests | 单元测试与 CTest 辅助工程 |
 
-`dfn_core` 内部再按 `Sources/models`、`Sources/solvers`、`Headers/models` 等过滤器组织，与仓库目录一一对应。头文件已加入工程，可以直接在解决方案资源管理器里跳转。
+`dfn_core` 内部按 `Models`、`Solvers`、`Linear algebra`、`Simulation`、`Common`、`Fit` 分模块，每个模块的头文件与实现文件放在同一个过滤器下（例如 `Models` 中同时有 `dfn.hpp` 和 `dfn.cpp`），头文件已加入工程，可以直接跳转。
 
 默认启动项目是 `dfn-sim`，按 **F5** 会用 Debug 配置运行 SPM 恒流放电示例，工作目录已设为仓库根目录，因此能直接读取 `configs/` 下的参数文件。改成 DFN/CCCV 等场景时，在“项目属性 → 调试 → 命令参数”里修改即可。要调试某个 lab，右键该实验选择“设为启动项目”后按 F5。
 

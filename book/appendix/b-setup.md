@@ -28,9 +28,11 @@ python scripts/plot_ocv.py ocv.csv
 Windows 上如果只有 MSVC，在“Developer Command Prompt”里用：
 
 ```bat
-cl /std:c++20 /EHsc /Iinclude /Fe:ocv_curve.exe labs\ocv_curve.cpp src\thermo.cpp
+cl /std:c++20 /EHsc /utf-8 /Iinclude /Fe:ocv_curve.exe labs\ocv_curve.cpp src\thermo.cpp
 ocv_curve.exe > ocv.csv
 ```
+
+源码里的中文注释按 UTF-8 保存，MSVC 需要 `/utf-8` 才能正确识别；CMake 工程已经自动带上这个选项。
 
 ## B.3 完整项目构建
 
