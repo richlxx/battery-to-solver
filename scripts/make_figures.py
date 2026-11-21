@@ -78,12 +78,15 @@ PALE_GRAY = "#e3e5e8"
 
 
 def exe(name):
-    path = ROOT / "build-klu" / "Release" / (name + ".exe")
-    if not path.exists():
-        path = ROOT / "build-klu" / "Release" / name
-    if not path.exists():
-        raise SystemExit(f"missing executable {path}; build with DFN_USE_KLU=ON")
-    return str(path)
+    for build in ("build-klu", "build"):
+        path = ROOT / build / "Release" / (name + ".exe")
+        if not path.exists():
+            path = ROOT / build / "Release" / name
+        if path.exists():
+            return str(path)
+    raise SystemExit(
+        f"missing executable build*/Release/{name}; build with CMake first"
+    )
 
 
 def cuda_exe(name):
@@ -1185,6 +1188,130 @@ def fit_figures(workdir):
     print("fit kappa:", kappas, "cpu:", benches, "gpu:", gpu)
 
 
+def fem_hat_figure():
+    fig, (ax, ax2) = plt.subplots(1, 2, figsize=(9.2, 3.6))
+
+    # 左图：节点网格与帽函数。第 i 个基函数只在相邻两个单元上非零，
+    # 升到 1 又落回 0；未知量是节点值 c_i，表面 r=R 处正好有一个节点。
+    xs = np.linspace(0.0, 4.0, 401)
+    for i in range(5):
+        hat = np.clip(1.0 - np.abs(xs - i), 0.0, 1.0)
+        shade = hat > 0.0
+        if i == 2:
+            ax.fill_between(xs, 0.0, hat, where=shade, color=PALE_ORANGE,
+                            alpha=0.9)
+            ax.plot(xs, hat, color=ORANGE, lw=2.2)
+        else:
+            ax.plot(xs, hat, color=BLUE, lw=1.2, alpha=0.75)
+    ax.text(2.07, 1.04, "$\\varphi_2$", fontsize=11, color=ORANGE)
+    ax.text(2.0, 0.20, "支集：两个相邻单元", fontsize=8.5, color=INK,
+            ha="center", bbox={"facecolor": "white", "edgecolor": "none",
+                               "pad": 1.5})
+    for i in range(5):
+        ax.plot([i], [1.0], "o", color=INK, ms=5)
+        ax.text(i, -0.16, f"$r_{i}$", ha="center", fontsize=9)
+    ax.text(2.0, 1.40, "节点值 $c_i$（表面 $r_4=R$ 也是未知量）",
+            ha="center", fontsize=9.5)
+    ax.plot([4.0, 4.0], [-0.06, 1.06], color=GRAY, lw=0.9, ls=":")
+    ax.text(4.05, 0.45, "$r=R$", fontsize=9, color=GRAY)
+    ax.set_xlim(-0.35, 4.6)
+    ax.set_ylim(-0.28, 1.52)
+    ax.set_axis_off()
+    ax.set_title("有限元：节点与帽函数")
+
+    # 右图：同一段区间上的有限体积——未知量在格心，表面在格外半格处，
+    # 表面浓度要靠外推（虚线），这正是第 4 章式 (4.12) 的来源。
+    for i in range(4):
+        ax2.add_patch(Rectangle((i, 0.0), 1.0, 0.6, facecolor=PALE_BLUE,
+                                edgecolor=BLUE, lw=1.1))
+        ax2.plot([i + 0.5], [0.3], "o", color=ORANGE, ms=6)
+        ax2.text(i + 0.5, -0.16, f"$c_{i}$", ha="center", fontsize=9)
+    for i in range(5):
+        ax2.plot([i, i], [-0.05, 0.65], color=GRAY, lw=0.8)
+    ax2.plot([3.5, 4.4], [0.3, -0.02], ls="--", color=ORANGE, lw=1.4)
+    ax2.plot([4.4], [-0.02], "*", color=ORANGE, ms=12)
+    ax2.text(3.55, 0.93, "表面在格外半格：$c_{surf}=c_3-\\alpha j$",
+             ha="center", va="top", fontsize=9, color=ORANGE)
+    ax2.set_xlim(-0.25, 4.75)
+    ax2.set_ylim(-0.45, 0.95)
+    ax2.set_axis_off()
+    ax2.set_title("有限体积：格心、界面与外推表面")
+
+    save(fig, "fig12-hat.svg")
+
+
+def fem_figure():
+    stdout, _ = run([exe("fem_sphere")])
+
+    # lab 输出三段 CSV（conv / ledger / profile），每段各有一行表头，
+    # 第二列都是 method；按段收集。
+    rows = {"conv": [], "ledger": [], "profile": []}
+    header = None
+    for line in stdout.splitlines():
+        parts = line.split(",")
+        if len(parts) > 1 and parts[1] == "method":
+            header = parts
+        elif header and parts[0] in rows:
+            rows[parts[0]].append(dict(zip(header, parts)))
+
+    fig, (ax, ax2) = plt.subplots(1, 2, figsize=(9.6, 3.8))
+
+    # 左图：表面浓度误差随网格加密的变化（对数-对数）。两条线斜率都
+    # 接近 −2，但 FV 高在常数上：同一网格约差 12 倍。
+    for method, color, label in (("fv", ORANGE, "有限体积（外推表面）"),
+                                 ("fem", BLUE, "有限元（节点表面）")):
+        picked = [r for r in rows["conv"] if r["method"] == method]
+        n = np.array([float(r["n"]) for r in picked])
+        err = np.array([float(r["err"]) for r in picked])
+        order = float(picked[-2]["order"])
+        ax.loglog(n, err, "o-", color=color, lw=1.8, ms=5,
+                  label=f"{label}，阶 ≈ {order:.2f}")
+        if method == "fem":
+            # 平行于 FEM 数据线、下移约 3 倍的参考线，只示意斜率 −2，
+            # 不与任何数据线重合；标签放在左端，那里与 FV 线相距最远。
+            ax.loglog(n, err / 3.0, ls=":", color=GRAY, lw=1.2)
+            ax.text(5.2, err[0] / 3.0 * 1.5, "斜率 $-2$", fontsize=9,
+                    color=GRAY, rotation=-31)
+    # 同一网格（128）下两条曲线的垂直距离即误差常数之差（约 12 倍），
+    # 标注放在箭头右上方空白区，避开两条数据线与图例。
+    err_by_n = {r["method"] + r["n"]: float(r["err"]) for r in rows["conv"]}
+    gap_top, gap_bottom = err_by_n["fv128"], err_by_n["fem128"]
+    ax.annotate("", xy=(128, gap_top), xytext=(128, gap_bottom),
+                arrowprops={"arrowstyle": "<->", "color": INK})
+    ax.text(140, gap_top * 3.2, "同网格差\n约 12 倍",
+            fontsize=9, ha="left")
+    ax.set_xlabel("单元/格子数 $n$")
+    ax.set_ylabel("$|c_{surf}-c_{ref}|$ [mol/m$^3$]")
+    ax.grid(True, which="both", alpha=0.25)
+    ax.legend(frameon=False, fontsize=9, loc="lower left")
+    ax.set_title("两条路都是二阶，差在常数", fontsize=10)
+
+    # 右图：末时刻的浓度剖面。FEM 节点解与 FV 格心解几乎重合，
+    # 差别集中在表面：FV 的外推点偏低。
+    ref = [r for r in rows["profile"] if r["method"] == "ref"]
+    ax2.plot(np.array([float(r["r"]) for r in ref]) / 1e-6,
+             [float(r["c"]) for r in ref], color=GRAY, lw=1.4,
+             label="参考解（FEM 2048）")
+    for method, color, marker, label in (
+            ("fem", BLUE, "o", "FEM 16 单元（节点）"),
+            ("fv", ORANGE, "s", "FV 16 格子（格心）")):
+        picked = [r for r in rows["profile"] if r["method"] == method]
+        ax2.plot(np.array([float(r["r"]) for r in picked]) / 1e-6,
+                 [float(r["c"]) for r in picked], marker, color=color, ms=4.5,
+                 lw=0, label=label)
+    surf = [r for r in rows["profile"] if r["method"] == "fv_surf"][0]
+    ax2.plot([float(surf["r"]) / 1e-6], [float(surf["c"])], "*",
+             color=ORANGE, ms=12, label="FV 外推表面点")
+    ax2.set_xlabel("$r$ [µm]")
+    ax2.set_ylabel("$c_s$ [mol/m$^3$]")
+    ax2.grid(alpha=0.3)
+    ax2.legend(frameon=False, fontsize=9, loc="lower left")
+    ax2.set_title("600 s 后的浓度剖面", fontsize=10)
+
+    fig.tight_layout()
+    save(fig, "fig12-fem.svg")
+
+
 def main():
     global PREVIEW
     parser = argparse.ArgumentParser(description=__doc__)
@@ -1212,6 +1339,8 @@ def main():
         "stability": stability_figure,
         "bdforder": bdf_order_figure,
         "protocol": protocol_figure,
+        "fem_hat": fem_hat_figure,
+        "fem": fem_figure,
     }
 
     with tempfile.TemporaryDirectory() as workdir:

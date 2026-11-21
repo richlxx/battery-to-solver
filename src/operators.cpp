@@ -5,6 +5,8 @@
 
 #include <stdexcept>
 
+#include "dfn/linalg/tridiagonal.hpp"
+
 namespace dfn {
 
 // 计算 y = A x，A 为本对象描述的三对角矩阵。
@@ -98,6 +100,82 @@ DiffusionOperator assemble_diffusion(const Grid1D& grid,
       grid.volume[static_cast<std::size_t>(n - 1)];
 
   return op;
+}
+
+// n 阶单位阵，供有限体积系统写成统一的 X dc/dt = Y c + f 形式。
+TridiagonalMatrix identity_matrix(int n) {
+  TridiagonalMatrix m;
+  m.n = n;
+  m.lower.assign(static_cast<std::size_t>(n), 0.0);
+  m.diag.assign(static_cast<std::size_t>(n), 1.0);
+  m.upper.assign(static_cast<std::size_t>(n), 0.0);
+  return m;
+}
+
+// 三对角矩阵的取负副本。
+TridiagonalMatrix negated_matrix(const TridiagonalMatrix& a) {
+  TridiagonalMatrix m;
+  m.n = a.n;
+  m.lower.assign(static_cast<std::size_t>(a.n), 0.0);
+  m.diag.assign(static_cast<std::size_t>(a.n), 0.0);
+  m.upper.assign(static_cast<std::size_t>(a.n), 0.0);
+  for (int i = 0; i < a.n; ++i) {
+    m.lower[static_cast<std::size_t>(i)] =
+        -a.lower[static_cast<std::size_t>(i)];
+    m.diag[static_cast<std::size_t>(i)] = -a.diag[static_cast<std::size_t>(i)];
+    m.upper[static_cast<std::size_t>(i)] =
+        -a.upper[static_cast<std::size_t>(i)];
+  }
+  return m;
+}
+
+// BDF2 推进：首步隐式 Euler，之后二阶 BDF；左端矩阵逐行装配后交给
+// Thomas 求解。X 与 Y 阶数一致、c 长度为 n，否则抛出异常。
+std::vector<double> march_tridiagonal(
+    const TridiagonalMatrix& x_matrix, const TridiagonalMatrix& y_matrix,
+    const std::vector<double>& source, std::vector<double> c, double dt,
+    int steps,
+    const std::function<void(int, const std::vector<double>&)>& record) {
+  const int n = x_matrix.n;
+  if (y_matrix.n != n || static_cast<int>(source.size()) != n ||
+      static_cast<int>(c.size()) != n) {
+    throw std::invalid_argument("march tridiagonal: size mismatch");
+  }
+
+  // 左端矩阵在两步之间只有 X 前的系数不同（1 对 1.5），逐元素重装即可；
+  // g 存 BDF2 的外推右端 2c^n - 0.5c^{n-1}（首步即 c^0）。
+  TridiagonalMatrix left;
+  left.n = n;
+  left.lower.assign(static_cast<std::size_t>(n), 0.0);
+  left.diag.assign(static_cast<std::size_t>(n), 0.0);
+  left.upper.assign(static_cast<std::size_t>(n), 0.0);
+  std::vector<double> g(static_cast<std::size_t>(n), 0.0);
+  std::vector<double> prev(static_cast<std::size_t>(n), 0.0);
+
+  if (record) {
+    record(0, c);
+  }
+  for (int step = 0; step < steps; ++step) {
+    const double theta = (step == 0) ? 1.0 : 1.5;
+    for (int i = 0; i < n; ++i) {
+      const std::size_t k = static_cast<std::size_t>(i);
+      left.diag[k] = theta * x_matrix.diag[k] + dt * y_matrix.diag[k];
+      left.lower[k] = theta * x_matrix.lower[k] + dt * y_matrix.lower[k];
+      left.upper[k] = theta * x_matrix.upper[k] + dt * y_matrix.upper[k];
+      g[k] = (step == 0) ? c[k] : 2.0 * c[k] - 0.5 * prev[k];
+    }
+    std::vector<double> rhs = x_matrix.multiply(g);
+    for (int i = 0; i < n; ++i) {
+      rhs[static_cast<std::size_t>(i)] +=
+          dt * source[static_cast<std::size_t>(i)];
+    }
+    prev = c;
+    c = solve_tridiagonal(left, rhs);
+    if (record) {
+      record(step + 1, c);
+    }
+  }
+  return c;
 }
 
 }  // namespace dfn

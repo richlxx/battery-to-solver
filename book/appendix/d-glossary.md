@@ -21,6 +21,15 @@
 | 稀疏矩阵 | sparse matrix | 绝大多数元素为零的矩阵 |
 | 三对角矩阵 | tridiagonal matrix | 只有主对角线及上下两条相邻对角线可能非零 |
 | 块三对角 | block tridiagonal | 以小块为元素的三对角矩阵 |
+| 有限元法 | finite element method (FEM) | 用基函数展开与弱形式离散，未知量是节点值 |
+| 基函数 | basis function | 拼出近似解的构件；一维线性元就是帽函数 |
+| 帽函数 | hat function | 节点处为 1、两侧线性降到 0 的分段线性基函数 |
+| 单元 | element | 相邻节点间的一小段（一维）或一小块（多维），有限元装配的基本单位 |
+| 弱形式 | weak form | 方程乘测试函数积分并分部积分后的形式，对解的光滑性要求更低 |
+| 测试函数 | test function | 加权余量里给方程"打分"的权重；Galerkin 法取它等于基函数 |
+| 刚度矩阵 | stiffness matrix | 弱形式中扩散项的矩阵，如 $D\int r^2\varphi_i'\varphi_j'\,dr$ |
+| 一致/集中质量阵 | consistent / lumped mass matrix | 有限元时间导数项的矩阵；集中质量把每行加总放到对角 |
+| 自然边界条件 | natural boundary condition | 分部积分后自动出现在弱形式里的条件（如给定通量） |
 | LU 分解 | LU factorization | 把 $A$ 写成下三角 $L$ 与上三角 $U$ 的乘积 |
 | 增广矩阵 | augmented matrix | 系数矩阵右侧接上常数列，写成 $[A\mid b]$ |
 | 初等行变换 | elementary row operation | 交换两行、某行乘非零数、一行加上另一行的倍数；不改变方程组的解 |
@@ -30,7 +39,7 @@
 | 残差 | residual | 把当前解代回方程后的偏差 |
 | 阻尼 | damping | 缩小 Newton 步长以避免发散 |
 | 缩放 | scaling | 把不同量级的变量化成相近数量级 |
-| 质量矩阵 | mass matrix | DAE 中乘以时间导数的那部分 |
+| 质量矩阵 | mass matrix | DAE 中乘以时间导数的那部分；有限元中即 $\int r^2\varphi_i\varphi_j\,dr$ 的三对角矩阵 |
 | 微分代数方程 | DAE | 同时含微分方程和代数约束的系统 |
 | 事件 | event | 满足某个条件时暂停或切换工况 |
 | 降阶模型 | reduced-order model | 用更少未知量近似原模型 |

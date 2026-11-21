@@ -48,6 +48,7 @@
 | 4 集成 | 9 | 组装完整求解器：跑真实工况 | ★ | CLI + 三层验证报告 |
 | 5 延伸 | 10 | 走得更远（选学） | ★★★ | SPM/SPMe 对照与扩展地图 |
 | 5 延伸 | 11 | 综合实验：从时间–电压曲线反推参数 | ★★★ | 可辨识性分析 + LM + CUDA 批量实验 |
+| 5 延伸 | 12 | 有限元法：另一条离散之路（选学） | ★★★ | P1 装配 + FEM/FV 对照实验 |
 
 附录：A 数学与参数速查、B 环境构建与 C++ 最小入门、C 调试清单、D 术语表、E API 对照、F 习题提示与答案、G 参考文献。
 
@@ -57,6 +58,7 @@
 | --- | --- | --- | --- |
 | 泰勒展开与差分 | 误差分析、通量近似 | 2, 4 | `labs/diff_error.cpp` |
 | 有限体积法 | 球壳固相扩散、电解液 1D 输运 | 4 | `include/dfn/grid.hpp`, `operators.hpp` |
+| 有限元法（P1） | 球扩散 FEM 装配、FEM/FV 对照 | 12 | `include/dfn/fem.hpp`, `labs/fem_sphere.cpp` |
 | 稀疏直接法 | 块三对角 + 边界箭头 Jacobian | 5 | `include/dfn/linalg/{eigen,klu}.hpp` |
 | Newton 法 | 稳态与每步内的非线性方程 | 6 | `include/dfn/solvers/newton.hpp` |
 | BDF/自适应步长 | 固相扩散与双电层造成的刚性 | 7 | `include/dfn/solvers/bdf2.hpp` |

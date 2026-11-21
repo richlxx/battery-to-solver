@@ -1,13 +1,15 @@
 #pragma once
 
+#include <functional>
 #include <vector>
 
 #include "dfn/grid.hpp"
 
 namespace dfn {
 
-// 三对角矩阵容器与基于 Grid1D 的扩散算子 div(D * grad(c)) 装配，
-// 是有限体积离散与三对角线性求解之间的接口层。
+// 三对角矩阵容器、基于 Grid1D 的扩散算子 div(D * grad(c)) 装配，以及
+// 配套的线性 BDF2 推进，是空间离散（有限体积与有限元）与三对角线性
+// 求解之间的接口层。
 
 // 三对角矩阵，第 i 行表示
 //   lower[i] * x[i - 1] + diag[i] * x[i] + upper[i] * x[i + 1]。
@@ -36,5 +38,25 @@ DiffusionOperator assemble_diffusion(const Grid1D& grid,
                                      const std::vector<double>& D_cell,
                                      double left_flux = 0.0,
                                      double right_flux = 0.0);
+
+// n 阶单位阵。有限体积的未知量已是“单位体积的变化率”，把半离散系统
+// 统一写成 X dc/dt = Y c + f 时，它的 X 退化为单位阵。
+TridiagonalMatrix identity_matrix(int n);
+
+// 取负副本：把 assemble_diffusion 给出的 dc/dt = A c + source 统一写成
+// X dc/dt = Y c + f 时，Y = -A。
+TridiagonalMatrix negated_matrix(const TridiagonalMatrix& a);
+
+// 线性半离散系统 X dc/dt = Y c + f 的 BDF2 推进（首步隐式 Euler 起步，
+// 压掉初值激发的高频分量）：首步 (X + dt·Y) c¹ = X c⁰ + dt·f，之后
+// (1.5X + dt·Y) cⁿ⁺¹ = X(2cⁿ − 0.5cⁿ⁻¹) + dt·f。X = I 时退化为有限
+// 体积的隐式推进；X 为（行缩放的）质量阵时即有限元的推进。线性问题、
+// 等步长，不需要 Newton 迭代。
+// record(step, c) 在初始时刻（step = 0）与每个步末被调用，可缺省。
+std::vector<double> march_tridiagonal(
+    const TridiagonalMatrix& x_matrix, const TridiagonalMatrix& y_matrix,
+    const std::vector<double>& source, std::vector<double> c, double dt,
+    int steps,
+    const std::function<void(int, const std::vector<double>&)>& record = {});
 
 }  // namespace dfn

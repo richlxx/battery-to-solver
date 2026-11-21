@@ -25,12 +25,14 @@ set(DFN_COMMON_SOURCES
   src/state.cpp
   src/grid.cpp
   src/operators.cpp
+  src/fem.cpp
   src/thermo.cpp)
 set(DFN_COMMON_HEADERS
   include/dfn/params.hpp
   include/dfn/state.hpp
   include/dfn/grid.hpp
   include/dfn/operators.hpp
+  include/dfn/fem.hpp
   include/dfn/thermo.hpp
   include/dfn/version.hpp)
 
@@ -158,12 +160,14 @@ if(DFN_BUILD_LABS)
   target_link_libraries(sparsity_map PRIVATE dfn_core)
   add_executable(fv_conservation labs/fv_conservation.cpp)
   target_link_libraries(fv_conservation PRIVATE dfn_core)
+  add_executable(fem_sphere labs/fem_sphere.cpp)
+  target_link_libraries(fem_sphere PRIVATE dfn_core)
   add_executable(param_fit labs/param_fit.cpp)
   target_link_libraries(param_fit PRIVATE dfn_core)
 
   set(DFN_LAB_TARGETS
     ocv_curve diff_error linear_solve newton_scalar euler_stiff euler_decay
-    bdf2_demo sparsity_map fv_conservation param_fit)
+    bdf2_demo sparsity_map fv_conservation fem_sphere param_fit)
   foreach(lab IN LISTS DFN_LAB_TARGETS)
     set_target_properties(${lab} PROPERTIES
       FOLDER "Labs"
@@ -300,6 +304,10 @@ if(BUILD_TESTING AND DFN_BUILD_TESTS)
   target_link_libraries(dfn_discretization_tests PRIVATE dfn_core)
   add_test(NAME dfn_discretization_tests COMMAND dfn_discretization_tests)
 
+  add_executable(dfn_fem_tests tests/test_fem.cpp)
+  target_link_libraries(dfn_fem_tests PRIVATE dfn_core)
+  add_test(NAME dfn_fem_tests COMMAND dfn_fem_tests)
+
   add_executable(dfn_linear_tests tests/test_linear.cpp)
   target_link_libraries(dfn_linear_tests PRIVATE dfn_core)
   add_test(NAME dfn_linear_tests COMMAND dfn_linear_tests)
@@ -388,13 +396,14 @@ if(BUILD_TESTING AND DFN_BUILD_TESTS)
     add_test(NAME bdf2_demo_runs COMMAND bdf2_demo)
     add_test(NAME sparsity_map_runs COMMAND sparsity_map)
     add_test(NAME fv_conservation_runs COMMAND fv_conservation)
+    add_test(NAME fem_sphere_runs COMMAND fem_sphere)
   endif()
 
   foreach(test_target
-      dfn_smoke dfn_state_tests dfn_discretization_tests dfn_linear_tests
-      dfn_newton_tests dfn_bdf2_tests dfn_dae_tests dfn_dfn_tests
-      dfn_sim_tests dfn_spm_tests dfn_spme_tests dfn_fit_tests dfn_ida_tests
-      dfn_dfn_ida_tests klu_probe)
+      dfn_smoke dfn_state_tests dfn_discretization_tests dfn_fem_tests
+      dfn_linear_tests dfn_newton_tests dfn_bdf2_tests dfn_dae_tests
+      dfn_dfn_tests dfn_sim_tests dfn_spm_tests dfn_spme_tests dfn_fit_tests
+      dfn_ida_tests dfn_dfn_ida_tests klu_probe)
     if(TARGET ${test_target})
       set_target_properties(${test_target} PROPERTIES FOLDER "Tests")
     endif()

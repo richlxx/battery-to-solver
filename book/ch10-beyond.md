@@ -145,6 +145,7 @@ $Q_{\mathrm{irr}}$ 是不可逆热（过电位与欧姆损耗），$Q_{\mathrm{r
 
 **数值方法**
 
+- 想了解另一条主流离散路线——有限元法，读第 12 章：同一个球扩散问题上的 FEM/FV 对照，弱形式与质量矩阵从零讲起。
 - Süli & Mayers, *An Introduction to Numerical Analysis*：从插值到 PDE 的完整教材，适合系统补课。
 - Ascher & Petzold, *Computer Methods for Ordinary Differential Equations and Differential-Algebraic Equations*：DAE 的经典，第 8 章的指标、初值一致性都出自这一套理论。
 - Hairer & Wanner, *Solving Ordinary Differential Equations II*：刚性问题的百科，BDF 与 Radau 的细节。

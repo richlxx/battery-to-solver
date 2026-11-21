@@ -32,3 +32,4 @@
 
 17. G. Strang. *Computational Science and Engineering*. Wellesley-Cambridge, 2007.
 18. L. N. Trefethen, D. Bau. *Numerical Linear Algebra*. SIAM, 1997.
+19. C. Johnson. *Numerical Solution of Partial Differential Equations by the Finite Element Method*. Cambridge, 1987（Dover 有重印版）.
