@@ -39,3 +39,6 @@ Thumbs.db
 # GitBook / mdbook local builds
 _book/
 book/book/
+
+# PDF book build output (regenerable via scripts/build_book_pdf.py)
+dist/
