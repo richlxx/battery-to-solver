@@ -1,0 +1,78 @@
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      dfnProperties;
+}
+
+// 与 configs/demo.yaml 对应的示意参数。
+// 所有量使用 SI：厚度/半径 m，浓度 mol/m^3，扩散系数 m^2/s，
+// 电导率 S/m，反应速率常数沿用 BV 前因子。
+cell
+{
+    temperature     298.15;
+}
+
+negative
+{
+    thickness       8.5e-05;
+    radius          5.0e-06;
+    porosity        0.25;
+    bruggeman       1.5;
+    c_max           30000;
+    c0              24000;
+    d_s             3.0e-14;
+    k               1.0e-06;
+    alpha_a         0.5;
+    alpha_c         0.5;
+    sigma           100;
+    n_radial        6;
+}
+
+positive
+{
+    thickness       7.5e-05;
+    radius          5.0e-06;
+    porosity        0.33;
+    bruggeman       1.5;
+    c_max           60000;
+    c0              18000;
+    d_s             4.0e-15;
+    k               1.0e-06;
+    alpha_a         0.5;
+    alpha_c         0.5;
+    sigma           10;
+    n_radial        6;
+}
+
+separator
+{
+    thickness       1.2e-05;
+    porosity        0.47;
+    bruggeman       1.5;
+}
+
+electrolyte
+{
+    c0              1000;
+    d_e             5.0e-10;
+    t_plus          0.26;
+    kappa           1.0;
+}
+
+control
+{
+    // 1C 放电，正值表示放电。
+    current_density 36;
+    // 每个时间步内的 Picard 迭代上限；picard_tol 是电位更新量的绝对阈值（V）。
+    max_picard      60;
+    picard_tol      1e-6;
+    // 场级欠松弛因子（1 表示不松弛）。relax_ce 必须保持 1，否则后向欧拉
+    // 解不精确，全锂量会缓慢漂移。
+    relax_phi       0.5;
+    relax_ce        1.0;
+    // 放电截止电压；设为 0 可关闭。
+    voltage_cutoff  3.5;
+    debug           false;
+}

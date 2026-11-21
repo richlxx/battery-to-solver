@@ -1,0 +1,21 @@
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volScalarField;
+    object      c_e;
+}
+
+dimensions      [0 -3 0 0 1 0 0];
+
+internalField   uniform 1000;
+
+boundaryField
+{
+    negCollector    { type zeroGradient; }
+    posCollector    { type zeroGradient; }
+    yMin            { type zeroGradient; }
+    yMax            { type zeroGradient; }
+    zMin            { type zeroGradient; }
+    zMax            { type zeroGradient; }
+}

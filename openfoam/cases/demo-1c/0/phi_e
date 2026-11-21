@@ -1,0 +1,22 @@
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volScalarField;
+    object      phi_e;
+}
+
+dimensions      [1 2 -3 0 0 -1 0];
+
+// -U_neg(c0/c_max) ≈ -0.05427 V，与 t=0 的平衡态一致。
+internalField   uniform -0.05426837;
+
+boundaryField
+{
+    negCollector    { type zeroGradient; }
+    posCollector    { type zeroGradient; }
+    yMin            { type zeroGradient; }
+    yMax            { type zeroGradient; }
+    zMin            { type zeroGradient; }
+    zMax            { type zeroGradient; }
+}

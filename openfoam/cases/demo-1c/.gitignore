@@ -1,0 +1,4 @@
+postProcessing/
+[1-9]*/
+log.*
+constant/polyMesh/

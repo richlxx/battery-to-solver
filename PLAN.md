@@ -49,6 +49,7 @@
 | 5 延伸 | 10 | 走得更远（选学） | ★★★ | SPM/SPMe 对照与扩展地图 |
 | 5 延伸 | 11 | 综合实验：从时间–电压曲线反推参数 | ★★★ | 可辨识性分析 + LM + CUDA 批量实验 |
 | 5 延伸 | 12 | 有限元法：另一条离散之路（选学） | ★★★ | P1 装配 + FEM/FV 对照实验 |
+| 5 延伸 | 13 | 用 OpenFOAM 再实现一次 DFN（选学） | ★★★ | `fvScalarMatrix` 版求解器 + 与 dfn-sim 的 1C 对照 |
 
 附录：A 数学与参数速查、B 环境构建与 C++ 最小入门、C 调试清单、D 术语表、E API 对照、F 习题提示与答案、G 参考文献。
 
@@ -59,6 +60,7 @@
 | 泰勒展开与差分 | 误差分析、通量近似 | 2, 4 | `labs/diff_error.cpp` |
 | 有限体积法 | 球壳固相扩散、电解液 1D 输运 | 4 | `include/dfn/grid.hpp`, `operators.hpp` |
 | 有限元法（P1） | 球扩散 FEM 装配、FEM/FV 对照 | 12 | `include/dfn/fem.hpp`, `labs/fem_sphere.cpp` |
+| OpenFOAM 有限体积框架 | 场的声明、`fvScalarMatrix` 装配、恒流反解 | 13 | `openfoam/dfnFoam/dfnFoam.C` |
 | 稀疏直接法 | 块三对角 + 边界箭头 Jacobian | 5 | `include/dfn/linalg/{eigen,klu}.hpp` |
 | Newton 法 | 稳态与每步内的非线性方程 | 6 | `include/dfn/solvers/newton.hpp` |
 | BDF/自适应步长 | 固相扩散与双电层造成的刚性 | 7 | `include/dfn/solvers/bdf2.hpp` |
@@ -173,6 +175,7 @@ SolveReport ida_integrate(const DaeModel& model, const std::vector<double>& y0,
 | M5 | 第 9 章 | CLI、验证矩阵、性能 | 1C 电压 RMSE < 10 mV（PyBaMM，省略 $\kappa_D$） | 3–4 天 |
 | M6 | 第 10 章 + 附录 + 试读修订 | 全书与速查 | 命令可复现、试读通过 | 4–5 天 |
 | M7 | 第 11 章（选学） | 参数辨识实验 + CUDA 批量 lab | 无噪声恢复、交叉验证、GPU/CPU 实测 | 4–5 天 |
+| M8 | 第 13 章（选学） | OpenFOAM 版 dfnFoam + 1C 算例 | 1C 曲线与 dfn-sim 电压差 < 2 mV、截止时间差 < 1% | 3–4 天 |
 
 ## 10. 风险与对策
 

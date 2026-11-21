@@ -8,8 +8,9 @@
 
 ## 你会得到什么
 
-- 一本 13 章、每章带检查点、答案与可运行实验的教程。
+- 一本 14 章、每章带检查点、答案与可运行实验的教程。
 - 一个可复现的 DFN 求解器：有限体积离散、解析 Jacobian、BDF2-DAE、事件驱动的 CC/CV、SPM/SPMe/DFN 三级模型与参数辨识。
+- 一个 OpenFOAM 版 DFN 求解器（第 13 章）：同一组方程用 `fvScalarMatrix` 重写，与自研求解器逐点对照验证。
 - 一套验证方法：守恒检验、观测收敛阶、与独立实现的对比，以及参数可辨识性分析。
 
 ## 怎么读
@@ -79,6 +80,7 @@ include/    求解器库头文件
 src/        库实现与 dfn-sim 命令行
 tests/      测试与验证代码
 configs/    电池参数 YAML
+openfoam/   OpenFOAM 版 dfnFoam 求解器与 1C 算例（第 13 章）
 scripts/    构建、画图与对比脚本
 ```
 

@@ -1,0 +1,24 @@
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volScalarField;
+    object      phi_s_pos;
+}
+
+dimensions      [1 2 -3 0 0 -1 0];
+
+// U_pos(c0/c_max) - U_neg(c0/c_max) ≈ 3.98573 V。
+internalField   uniform 3.98573163;
+
+boundaryField
+{
+    negCollector    { type zeroGradient; }
+    // 恒流通过求解器内部的电压反解实现：每个 Picard 迭代更新该值，
+    // 使正极反应电流的积分等于 control/current_density。
+    posCollector    { type fixedValue; value uniform 3.98573163; }
+    yMin            { type zeroGradient; }
+    yMax            { type zeroGradient; }
+    zMin            { type zeroGradient; }
+    zMax            { type zeroGradient; }
+}
